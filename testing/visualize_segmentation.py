@@ -30,7 +30,7 @@ if __name__ == '__main__':
 
     if args.image_path.endswith('.npz'):
         with np.load(args.image_path) as data:
-            image = data['image']
+            image = data['image'].astype(np.float32)
             resolution = data['resolution']
             if len(image.shape) == 3:
                 image = image[args.slice]
