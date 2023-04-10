@@ -16,16 +16,16 @@
 #  You should have received a copy of the GNU General Public License
 #  along with this program.  If not, see <https://www.gnu.org/licenses/>.
 import os
-import shutil
+import sys
 
-from common import generate_convert
+if 'generate_convert' not in locals() and 'generate_convert' not in globals():
+    from dafne_models.common import generate_convert
 
 try:
     from dafne_dl import DynamicDLModel
 except ModuleNotFoundError:
     from dl import DynamicDLModel
 
-import sys
 
 def coscia_unet():
     

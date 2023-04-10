@@ -10,7 +10,7 @@ from dafne_dl import RemoteModelProvider
 import matplotlib.pyplot as plt
 import os
 
-if __name__ == '__main__':
+def main():
     print(config.CONFIG_DIR)
     parser = argparse.ArgumentParser()
     parser.add_argument("image_path", help="Path to image to segment")
@@ -53,3 +53,6 @@ if __name__ == '__main__':
     plt.gca().set_axis_off()
     plt.savefig(f'segmented_{os.path.splitext(os.path.basename(args.image_path))[0]}_{args.model_id}.png', bbox_inches='tight', pad_inches=0)
     plt.show()
+
+if __name__ == '__main__':
+    main()

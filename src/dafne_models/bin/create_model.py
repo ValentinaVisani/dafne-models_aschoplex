@@ -6,6 +6,14 @@ import os
 import pickle
 import sys
 import uuid
+from .. import resources
+
+assert sys.version_info.major == 3, "This software is only compatible with Python 3.x"
+
+if sys.version_info.minor < 10:
+    import importlib_resources as pkg_resources
+else:
+    import importlib.resources as pkg_resources
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -19,6 +27,7 @@ from tensorflow.keras.callbacks import ReduceLROnPlateau, EarlyStopping, Callbac
 VALIDATION_SPLIT = 0.2
 BATCH_SIZE = 5
 MAX_EPOCHS = 150
+PATIENCE = 5
 
 # Get the path of the script's parent directory
 parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
@@ -99,8 +108,6 @@ def get_create_model_function(source):
     :param source: source in string form
     :return: a function returning a keras model
     """
-    # remove the generate_convert import from the source code
-    source = source.replace('from common import generate_convert', '')
 
     # replace the generate_convert function with a dummy function
     def dummy_generate_convert(*args, **kwargs):
@@ -172,15 +179,15 @@ def make_validation_list(data_list, common_resolution, model_size, label_dict):
     :param label_dict: dictionary of the labels
     :return:
     """
-    if os.path.exists('validation_obj.pickle'):
-        with open('validation_obj.pickle', 'rb') as f:
+    if os.path.exists('../../../model_trainer/validation_obj.pickle'):
+        with open('../../../model_trainer/validation_obj.pickle', 'rb') as f:
             training_objects = pickle.load(f)
     else:
         normalized_data_list, normalized_mask_list = normalize_training_data(data_list,
                                                                              common_resolution,
                                                                              model_size, label_dict)
         training_objects = generate_training_and_weights(normalized_data_list, normalized_mask_list)
-        with open('validation_obj.pickle', 'wb') as f:
+        with open('../../../model_trainer/validation_obj.pickle', 'wb') as f:
             pickle.dump(training_objects, f)
     x_list = [np.stack([training_object[:,:,0], training_object[:,:,-1]], axis=-1) for training_object in training_objects]
     y_list = [training_object[:,:,1:-1] for training_object in training_objects]
@@ -202,15 +209,15 @@ def make_data_generator(data_list, common_resolution, model_size, label_dict):
     :param label_dict: dictionary of the labels
     :return:
     """
-    if os.path.exists('training_obj.pickle'):
-        with open('training_obj.pickle', 'rb') as f:
+    if os.path.exists('../../../model_trainer/training_obj.pickle'):
+        with open('../../../model_trainer/training_obj.pickle', 'rb') as f:
             training_objects = pickle.load(f)
     else:
         normalized_data_list, normalized_mask_list = normalize_training_data(data_list,
                                                                              common_resolution,
                                                                              model_size, label_dict)
         training_objects = generate_training_and_weights(normalized_data_list, normalized_mask_list)
-        with open('training_obj.pickle', 'wb') as f:
+        with open('../../../model_trainer/training_obj.pickle', 'wb') as f:
             pickle.dump(training_objects, f)
     steps = int(len(training_objects) / BATCH_SIZE)
     data_generator = DataGeneratorMem(training_objects, list_X=list(range(steps * BATCH_SIZE)),
@@ -251,7 +258,20 @@ def train_model(model, data_list, common_resolution, model_size, label_dict):
 
         plt.ion()
         class PredictionCallback(Callback):
+            def __init__(self):
+                super().__init__()
+                self.min_val_loss = np.inf
+                self.n_val_loss_increases = 0
             def on_epoch_end(self, epoch, logs=None):
+                if logs['val_loss'] < self.min_val_loss:
+                    self.min_val_loss = logs['val_loss']
+                    self.n_val_loss_increases = 0
+                elif logs['val_loss'] > self.min_val_loss:
+                    self.n_val_loss_increases += 1
+
+                if self.n_val_loss_increases >= PATIENCE:
+                    self.model.stop_training = True
+
                 segmentation = self.model.predict(np.expand_dims(x_val_list[0],0))
                 #plt.imshow(x_val_list[0][:,:,0])
                 #plt.figure()
@@ -262,14 +282,6 @@ def train_model(model, data_list, common_resolution, model_size, label_dict):
 
         prediction_callback = PredictionCallback()
 
-        reduce_lr = ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=4, min_lr=0.000005)
-        # Define the EarlyStopping callback
-        early_stopping = EarlyStopping(
-            monitor='val_loss',  # Monitor the validation loss
-            mode='min',  # Stop when the monitored quantity stops decreasing
-            patience=5,  # Stop if the monitored quantity does not improve after 5 epochs
-            verbose=1,  # Print a message when the training is stopped
-        )
         history = model.fit(training_generator, epochs=MAX_EPOCHS,
                   steps_per_epoch=steps,
                   validation_data=(np.stack(x_val_list,0), np.stack(y_val_list,0)),
@@ -285,7 +297,7 @@ def create_model(model_name, data_path):
     common_resolution, model_size, label_dict = get_model_info(data_list)
 
     # load the model template
-    with open('generate_model.py.tmpl', 'r') as f:
+    with pkg_resources.files(resources).joinpath('generate_model.py.tmpl').open() as f:
         source = f.read()
 
     # replace the variables
@@ -313,12 +325,13 @@ def save_weights(model, model_name):
     :param model_name: the name of the model
     :return:
     """
-    os.makedirs('weights', exist_ok=True)
-    model_path = os.path.join('weights', f'weights_{model_name}.hdf5')
+    os.makedirs('../../../model_trainer/weights', exist_ok=True)
+    model_path = os.path.join('../../../model_trainer/weights', f'weights_{model_name}.hdf5')
     model.save_weights(model_path)
     print(f'Saved weights to {model_path}')
 
-if __name__ == '__main__':
+
+def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("model_name", help="Name of the model to create")
     parser.add_argument("data_path", help="Path to data folder (containing the '*.npz' files)")
@@ -333,4 +346,5 @@ if __name__ == '__main__':
     plt.show()
 
 
-
+if __name__ == '__main__':
+    main()

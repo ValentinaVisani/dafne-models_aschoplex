@@ -6,7 +6,7 @@ import numpy as np
 import sys
 import os
 
-if __name__ == '__main__':
+def main():
     path = sys.argv[1]
 
     med_volume, *_ = dosma_volume_from_path(path)
@@ -15,3 +15,6 @@ if __name__ == '__main__':
     else:
         out_path = path + '.npz'
     np.savez(out_path, data=med_volume.volume, resolution=med_volume.pixel_spacing)
+
+if __name__ == '__main__':
+    main()

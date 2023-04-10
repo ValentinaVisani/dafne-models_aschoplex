@@ -23,7 +23,7 @@ def generate_convert_replacement(model_id,
                                  timestamp_id=int(time.time())
                                  )
 
-if __name__ == '__main__':
+def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("source_path", help="Path to model source code")
     parser.add_argument("model_path", help="Path to model file containing the weights to test")
@@ -42,7 +42,6 @@ if __name__ == '__main__':
         source = f.read()
 
     # replace the generate_convert function
-    source = source.replace('from common import generate_convert', '')
     new_locals = {'generate_convert': generate_convert_replacement}
     # thanks to the new generate_convert function, the model will be generated in the new_generated_model global variable
     exec(source, globals(), new_locals)
@@ -78,4 +77,5 @@ if __name__ == '__main__':
     plt.imshow(accumulated_mask, alpha=0.5, cmap='jet')
     plt.show()
 
-
+if __name__ == '__main__':
+    main()
