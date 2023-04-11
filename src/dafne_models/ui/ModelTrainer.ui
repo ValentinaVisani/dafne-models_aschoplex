@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>717</width>
-    <height>202</height>
+    <width>815</width>
+    <height>607</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -69,6 +69,9 @@
      </item>
      <item>
       <widget class="QPushButton" name="save_choose_Button">
+       <property name="enabled">
+        <bool>false</bool>
+       </property>
        <property name="text">
         <string>Choose...</string>
        </property>
@@ -87,7 +90,20 @@
     </widget>
    </item>
    <item>
+    <widget class="QLabel" name="progress_Label">
+     <property name="text">
+      <string/>
+     </property>
+    </widget>
+   </item>
+   <item>
     <widget class="QGroupBox" name="fit_output_box">
+     <property name="minimumSize">
+      <size>
+       <width>800</width>
+       <height>400</height>
+      </size>
+     </property>
      <property name="title">
       <string>Fitting output</string>
      </property>
@@ -110,7 +126,7 @@
     </spacer>
    </item>
    <item>
-    <widget class="QPushButton" name="fit_button">
+    <widget class="QPushButton" name="fit_Button">
      <property name="enabled">
       <bool>false</bool>
      </property>

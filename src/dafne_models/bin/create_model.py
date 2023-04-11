@@ -66,16 +66,9 @@ def get_model_info(data_list):
     resolutions = [data['resolution'][:2] for data in data_list]
     common_resolution = np.median(resolutions, axis=0)[:2]
 
-    # Find the most common size in voxel of all the slices
-    sizes = [data['data'].shape[:2] for data in data_list]
-    sizes_dict = {}
-    for size in sizes:
-        if size in sizes_dict:
-            sizes_dict[size] += 1
-        else:
-            sizes_dict[size] = 1
-    common_size = max(sizes_dict, key=sizes_dict.get)
-    max_size = max(common_size)
+    # find the maximum size normalized to the common resolution
+    max_size = [np.ceil(data['data'].shape[:2]*data['resolution'][:2] / common_resolution).max() for data in data_list]
+    max_size = int(max(max_size))
     model_size = (max_size, max_size)
 
     # Create a set with all the different labels present in the files
@@ -179,15 +172,15 @@ def make_validation_list(data_list, common_resolution, model_size, label_dict):
     :param label_dict: dictionary of the labels
     :return:
     """
-    if os.path.exists('../../../model_trainer/validation_obj.pickle'):
-        with open('../../../model_trainer/validation_obj.pickle', 'rb') as f:
+    if os.path.exists('validation_obj.pickle'):
+        with open('validation_obj.pickle', 'rb') as f:
             training_objects = pickle.load(f)
     else:
         normalized_data_list, normalized_mask_list = normalize_training_data(data_list,
                                                                              common_resolution,
                                                                              model_size, label_dict)
         training_objects = generate_training_and_weights(normalized_data_list, normalized_mask_list)
-        with open('../../../model_trainer/validation_obj.pickle', 'wb') as f:
+        with open('validation_obj.pickle', 'wb') as f:
             pickle.dump(training_objects, f)
     x_list = [np.stack([training_object[:,:,0], training_object[:,:,-1]], axis=-1) for training_object in training_objects]
     y_list = [training_object[:,:,1:-1] for training_object in training_objects]
@@ -209,15 +202,15 @@ def make_data_generator(data_list, common_resolution, model_size, label_dict):
     :param label_dict: dictionary of the labels
     :return:
     """
-    if os.path.exists('../../../model_trainer/training_obj.pickle'):
-        with open('../../../model_trainer/training_obj.pickle', 'rb') as f:
+    if os.path.exists('training_obj.pickle'):
+        with open('training_obj.pickle', 'rb') as f:
             training_objects = pickle.load(f)
     else:
         normalized_data_list, normalized_mask_list = normalize_training_data(data_list,
                                                                              common_resolution,
                                                                              model_size, label_dict)
         training_objects = generate_training_and_weights(normalized_data_list, normalized_mask_list)
-        with open('../../../model_trainer/training_obj.pickle', 'wb') as f:
+        with open('training_obj.pickle', 'wb') as f:
             pickle.dump(training_objects, f)
     steps = int(len(training_objects) / BATCH_SIZE)
     data_generator = DataGeneratorMem(training_objects, list_X=list(range(steps * BATCH_SIZE)),
@@ -225,7 +218,19 @@ def make_data_generator(data_list, common_resolution, model_size, label_dict):
 
     return data_generator, steps
 
-def train_model(model, data_list, common_resolution, model_size, label_dict):
+def prepare_data(training_data_list, validation_data_list, common_resolution, model_size, label_dict):
+    training_generator, steps = make_data_generator(training_data_list, common_resolution, model_size, label_dict)
+
+    if len(validation_data_list) > 0:
+        x_val_list, y_val_list = make_validation_list(validation_data_list, common_resolution, model_size, label_dict)
+    else:
+        x_val_list = []
+        y_val_list = []
+
+    return training_generator, steps, x_val_list, y_val_list
+
+
+def train_model(model, training_generator, steps, x_val_list, y_val_list, custom_callbacks=None):
     """
     Train the model
     :param model: Keras model
@@ -235,19 +240,8 @@ def train_model(model, data_list, common_resolution, model_size, label_dict):
     :param label_dict: dictionary with labels
     :return: the trained model
     """
-    n_datasets = len(data_list)
-    n_validation = int(n_datasets * VALIDATION_SPLIT)
 
-    if n_validation == 0:
-        print("WARNING: No validation data will be used")
-
-    validation_data_list = data_list[:n_validation]
-    training_data_list = data_list[n_validation:]
-
-    training_generator, steps = make_data_generator(training_data_list, common_resolution, model_size, label_dict)
-
-    if n_validation > 0:
-        x_val_list, y_val_list = make_validation_list(validation_data_list, common_resolution, model_size, label_dict)
+    n_validation = len(x_val_list)
 
     # now train the model on the data
     adamlr = optimizers.Adam(learning_rate=0.009765, beta_1=0.9, beta_2=0.999, epsilon=1e-08, amsgrad=True)
@@ -255,7 +249,6 @@ def train_model(model, data_list, common_resolution, model_size, label_dict):
 
     # do the training
     if n_validation > 0:
-
         plt.ion()
         class PredictionCallback(Callback):
             def __init__(self):
@@ -280,22 +273,29 @@ def train_model(model, data_list, common_resolution, model_size, label_dict):
                 plt.show(block=False)
                 plt.pause(0.001)
 
-        prediction_callback = PredictionCallback()
+        if custom_callbacks is None:
+            custom_callbacks = [PredictionCallback()]
 
         history = model.fit(training_generator, epochs=MAX_EPOCHS,
                   steps_per_epoch=steps,
                   validation_data=(np.stack(x_val_list,0), np.stack(y_val_list,0)),
-                  callbacks=[prediction_callback],
+                  callbacks=custom_callbacks,
                   verbose=1)
     else:
-        history = model.fit(training_generator, epochs=MAX_EPOCHS, steps_per_epoch=steps, verbose=1)
+        if custom_callbacks is None:
+            custom_callbacks = []
+        history = model.fit(training_generator, epochs=MAX_EPOCHS, steps_per_epoch=steps, verbose=1, callbacks=custom_callbacks)
 
     return model, history
-def create_model(model_name, data_path):
-    data_list = load_data(data_path)
 
-    common_resolution, model_size, label_dict = get_model_info(data_list)
-
+def create_model_source(model_name, common_resolution, model_size, label_dict):
+    """
+    Create the source code of the model
+    :param common_resolution: resolution of the model
+    :param model_size: size of the model
+    :param label_dict: dictionary of the labels
+    :return: the source code
+    """
     # load the model template
     with pkg_resources.files(resources).joinpath('generate_model.py.tmpl').open() as f:
         source = f.read()
@@ -307,6 +307,15 @@ def create_model(model_name, data_path):
     source = source.replace('%%MODEL_UID%%', f'"{str(uuid.uuid4())}"')
     source = source.replace('%%LABELS_DICT%%', str(label_dict))
 
+    return source
+
+def create_model(model_name, data_path):
+    data_list = load_data(data_path)
+
+    common_resolution, model_size, label_dict = get_model_info(data_list)
+
+    source = create_model_source(model_name, common_resolution, model_size, label_dict)
+
     # write the new model generator script
     with open(f'generate_{model_name}_model.py', 'w') as f:
         f.write(source)
@@ -314,7 +323,19 @@ def create_model(model_name, data_path):
     create_model_function = get_create_model_function(source)
     model = create_model_function()
 
-    trained_model, history = train_model(model, data_list, common_resolution, model_size, label_dict)
+    n_datasets = len(data_list)
+    n_validation = int(n_datasets * VALIDATION_SPLIT)
+
+    if n_validation == 0:
+        print("WARNING: No validation data will be used")
+
+    validation_data_list = data_list[:n_validation]
+    training_data_list = data_list[n_validation:]
+
+    training_generator, steps, x_val_list, y_val_list = prepare_data(training_data_list, validation_data_list,
+                                                                     common_resolution, model_size, label_dict)
+
+    trained_model, history = train_model(model, training_generator, steps, x_val_list, y_val_list)
     return trained_model, history
 
 
@@ -325,8 +346,8 @@ def save_weights(model, model_name):
     :param model_name: the name of the model
     :return:
     """
-    os.makedirs('../../../model_trainer/weights', exist_ok=True)
-    model_path = os.path.join('../../../model_trainer/weights', f'weights_{model_name}.hdf5')
+    os.makedirs('weights', exist_ok=True)
+    model_path = os.path.join('weights', f'weights_{model_name}.hdf5')
     model.save_weights(model_path)
     print(f'Saved weights to {model_path}')
 
