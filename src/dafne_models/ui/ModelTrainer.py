@@ -1,4 +1,5 @@
 import os
+import time
 
 from PyQt5 import QtWidgets, QtGui
 from PyQt5.QtCore import pyqtSlot, pyqtSignal, QObject, QVariant
@@ -6,11 +7,12 @@ from PyQt5.QtCore import pyqtSlot, pyqtSignal, QObject, QVariant
 import matplotlib.pyplot as plt
 import numpy as np
 from PyQt5.QtWidgets import QMessageBox, QFileDialog, QWidget
+from dafne_dl import DynamicDLModel
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from tensorflow.keras.callbacks import Callback
 
 from .ModelTrainer_Ui import Ui_ModelTrainerUI
-from ..bin.create_model import load_data, get_model_info, create_model_source, get_create_model_function, train_model, \
+from ..bin.create_model import load_data, get_model_info, create_model_source, get_model_functions, train_model, \
     prepare_data
 from ..utils.ThreadHelpers import separate_thread_decorator
 
@@ -28,6 +30,7 @@ class PredictionUICallback(Callback, QObject):
         self.n_val_loss_increases = 0
         self.test_image = test_image
         self.stop = False
+        self.best_weights = None
 
     def on_epoch_end(self, epoch, logs=None):
         if self.stop:
@@ -44,6 +47,7 @@ class PredictionUICallback(Callback, QObject):
         if val_loss < self.min_val_loss:
             self.min_val_loss = logs['val_loss']
             self.n_val_loss_increases = 0
+            self.best_weights = self.model.get_weights()
         elif val_loss > self.min_val_loss:
             self.n_val_loss_increases += 1
 
@@ -73,7 +77,7 @@ class ModelTrainer(QWidget, Ui_ModelTrainerUI):
         self.adjustSize()
         self.pyplot_layout = QtWidgets.QVBoxLayout(self.fit_output_box)
         self.pyplot_layout.setObjectName("pyplot_layout")
-
+        self.data_dir = None
         self.fig = plt.figure()
         self.fig.tight_layout()
         self.canvas = FigureCanvas(self.fig)
@@ -84,6 +88,7 @@ class ModelTrainer(QWidget, Ui_ModelTrainerUI):
         self.ax_left = self.fig.add_subplot(121)
         self.ax_right = self.fig.add_subplot(122)
         self.ax_right.set_title('Current output')
+        self.ax_right.axis('off')
         self.choose_Button.clicked.connect(self.choose_data)
         self.save_choose_Button.clicked.connect(self.choose_save_location)
         self.set_progress_signal.connect(self.set_progress)
@@ -112,12 +117,15 @@ class ModelTrainer(QWidget, Ui_ModelTrainerUI):
             self.save_choose_Button.setEnabled(False)
             self.location_Text.setText("")
             self.decide_enable_fit()
+            self.data_dir = None
 
-        self.data_dir = QFileDialog.getExistingDirectory(self, "Select Directory")
+        npz_file, _ = QFileDialog.getOpenFileName(self, "Choose data files", "", "Numpy files (*.npz);;All Files(*)")
 
-        if not self.data_dir:
+        if not npz_file:
             invalid()
             return
+
+        self.data_dir = os.path.dirname(npz_file)
 
         npz_files = [f for f in os.listdir(self.data_dir) if f.endswith('.npz')]
         if len(npz_files) > 0:
@@ -160,13 +168,14 @@ class ModelTrainer(QWidget, Ui_ModelTrainerUI):
         common_resolution, model_size, label_dict = get_model_info(data_list)
 
         self.set_progress_signal.emit(20, 'Creating model')
-        source = create_model_source(self.model_name, common_resolution, model_size, label_dict)
+        source, model_uuid = create_model_source(self.model_name, common_resolution, model_size, label_dict)
 
         # write the new model generator script
         with open(os.path.join(self.model_dir, f'generate_{self.model_name}_model.py'), 'w') as f:
             f.write(source)
 
-        create_model_function = get_create_model_function(source)
+        create_model_function, apply_model_function, incremental_learn_function = get_model_functions(source)
+        print(create_model_function)
         model = create_model_function()
 
         n_datasets = len(data_list)
@@ -189,9 +198,27 @@ class ModelTrainer(QWidget, Ui_ModelTrainerUI):
         self.fitting_ui_callback.fit_signal.connect(self.update_plot)
 
         trained_model, history = train_model(model, training_generator, steps, x_val_list, y_val_list, [self.fitting_ui_callback])
+        if self.fitting_ui_callback.best_weights is not None:
+            trained_model.set_weights(self.fitting_ui_callback.best_weights)
 
         self.fitting_ui_callback = None
 
+        self.set_progress_signal.emit(90, 'Saving model')
+
+        model_object = DynamicDLModel(model_uuid,
+                                     create_model_function,
+                                     apply_model_function,
+                                     incremental_learn_function=incremental_learn_function,
+                                     weights=trained_model.get_weights(),
+                                     timestamp_id=int(time.time())
+                                     )
+
+        with open(os.path.join(self.model_dir, f'{self.model_name}.model'), 'wb') as f:
+            model_object.dump(f)
+
+        # save weights
+        os.makedirs(os.path.join(self.model_dir, 'weights'), exist_ok=True)
+        trained_model.save_weights(os.path.join(self.model_dir, 'weights', f'weights_{self.model_name}.hdf5'))
         self.set_progress_signal.emit(100, 'Done')
         self.stop_fitting_signal.emit()
         self.is_fitting = False
@@ -204,7 +231,7 @@ class ModelTrainer(QWidget, Ui_ModelTrainerUI):
         self.ax_left.clear()
         self.ax_left.plot(self.loss_list)
         self.ax_left.plot(self.val_loss_list)
-        self.ax_left.legend(['train', 'validation'], loc='upper left')
+        self.ax_left.legend(['train', 'validation'], loc='upper right')
         self.ax_right.clear()
         self.ax_right.set_title('Current output')
         self.ax_right.imshow(label)
@@ -223,6 +250,8 @@ class ModelTrainer(QWidget, Ui_ModelTrainerUI):
         self.fit_Button.setText('Stop fitting')
         self.fit_output_box.show()
         self.adjustSize()
+        self.choose_Button.setEnabled(False)
+        self.save_choose_Button.setEnabled(False)
 
     @pyqtSlot()
     def stop_fitting_slot(self):

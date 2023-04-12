@@ -6,6 +6,10 @@ import os
 import pickle
 import sys
 import uuid
+
+from dafne_dl.DynamicDLModel import source_to_fn
+
+from src.dafne_models.utils.source_tools import extract_function_source
 from .. import resources
 
 assert sys.version_info.major == 3, "This software is only compatible with Python 3.x"
@@ -95,21 +99,20 @@ def escape_string(string):
     return string.replace('"', '\\"')
 
 
-def get_create_model_function(source):
+def get_model_functions(source):
     """
     Extract the create_model function from the source code
     :param source: source in string form
-    :return: a function returning a keras model
+    :return: functions returning a keras model, the apply function, and the incremental learn function
     """
 
-    # replace the generate_convert function with a dummy function
-    def dummy_generate_convert(*args, **kwargs):
-        pass
+    # source_to_fn automatically appends the source code as an attribute of the function
+    model_create_fn = source_to_fn(extract_function_source(source, 'make_unet'))
+    model_apply_fn = source_to_fn(extract_function_source(source, 'model_apply'))
+    model_incremental_mem_fn = source_to_fn(extract_function_source(source, 'model_incremental_mem'))
 
-    new_locals = {'generate_convert': dummy_generate_convert}
-    # now when we execute the file, only the functions will be created. This is used to extract the make_unet function
-    exec(source, globals(), new_locals)
-    return new_locals['make_unet']
+
+    return model_create_fn, model_apply_fn, model_incremental_mem_fn
 
 
 def convert_3d_mask_to_slices(mask_dictionary):
@@ -300,27 +303,29 @@ def create_model_source(model_name, common_resolution, model_size, label_dict):
     with pkg_resources.files(resources).joinpath('generate_model.py.tmpl').open() as f:
         source = f.read()
 
+    model_uuid = str(uuid.uuid4())
+
     # replace the variables
     source = source.replace('%%MODEL_NAME%%', f'"{escape_string(model_name)}"')
     source = source.replace('%%MODEL_RESOLUTION%%', f'[{common_resolution[0]:.2f}, {common_resolution[1]:.2f}]')
     source = source.replace('%%MODEL_SIZE%%', f'[{model_size[0]:d}, {model_size[1]:d}]')
-    source = source.replace('%%MODEL_UID%%', f'"{str(uuid.uuid4())}"')
+    source = source.replace('%%MODEL_UID%%', f'"{model_uuid}"')
     source = source.replace('%%LABELS_DICT%%', str(label_dict))
 
-    return source
+    return source, uuid
 
 def create_model(model_name, data_path):
     data_list = load_data(data_path)
 
     common_resolution, model_size, label_dict = get_model_info(data_list)
 
-    source = create_model_source(model_name, common_resolution, model_size, label_dict)
+    source, = create_model_source(model_name, common_resolution, model_size, label_dict)
 
     # write the new model generator script
     with open(f'generate_{model_name}_model.py', 'w') as f:
         f.write(source)
 
-    create_model_function = get_create_model_function(source)
+    create_model_function, apply_model_function, incremental_learn_function = get_model_functions(source)
     model = create_model_function()
 
     n_datasets = len(data_list)
