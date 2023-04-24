@@ -9,7 +9,12 @@ import uuid
 
 from dafne_dl.DynamicDLModel import source_to_fn
 
-from src.dafne_models.utils.source_tools import extract_function_source
+assert sys.version_info.major == 3, "This software is only compatible with Python 3.x"
+
+if sys.version_info.minor < 9:
+    from ..utils.source_tools import extract_function_source_basic as extract_function_source
+else:
+    from ..utils.source_tools import extract_function_source
 from .. import resources
 
 assert sys.version_info.major == 3, "This software is only compatible with Python 3.x"

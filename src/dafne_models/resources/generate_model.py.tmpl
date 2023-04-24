@@ -71,7 +71,7 @@ def make_unet():
     Level1_l=Add()([Level1_l,Level1_l_shortcut])
     Level1_l=Activation('relu')(Level1_l)
 
-    print_dbg(f'{Level1_l.shape=}')
+    print_dbg(f'{Level1_l.shape}')
     Level1_l_size = Level1_l.shape[1]
 
     Level2_l=Conv2D(filters=64,kernel_size=(2,2),strides=2,kernel_regularizer=regularizers.l2(reg))(Level1_l)
@@ -89,7 +89,7 @@ def make_unet():
     Level2_l=Add()([Level2_l,Level2_l_shortcut])
     Level2_l=Activation('relu')(Level2_l)
 
-    print_dbg(f'{Level2_l.shape=}')
+    print_dbg(f'{Level2_l.shape}')
     Level2_l_size = Level2_l.shape[1]
     
     Level3_l=Conv2D(filters=128,kernel_size=(2,2),strides=2,kernel_regularizer=regularizers.l2(reg))(Level2_l)
@@ -108,7 +108,7 @@ def make_unet():
     Level3_l=Activation('relu')(Level3_l)
 
     Level3_l_size = Level3_l.shape[1]
-    print_dbg(f'{Level3_l.shape=}')
+    print_dbg(f'{Level3_l.shape}')
     
     Level4_l=Conv2D(filters=256,kernel_size=(2,2),strides=2,kernel_regularizer=regularizers.l2(reg))(Level3_l)
     Level4_l=BatchNormalization(axis=-1)(Level4_l)
@@ -126,7 +126,7 @@ def make_unet():
     Level4_l=Activation('relu')(Level4_l)
 
     Level4_l_size = Level4_l.shape[1]
-    print_dbg(f'{Level4_l.shape=}')
+    print_dbg(f'{Level4_l.shape}')
 
     Level5_l=Conv2D(filters=512,kernel_size=(2,2),strides=2,kernel_regularizer=regularizers.l2(reg))(Level4_l)
     Level5_l=BatchNormalization(axis=-1)(Level5_l)
@@ -144,14 +144,14 @@ def make_unet():
     Level5_l=Activation('relu')(Level5_l)
 
     Level5_l_size = Level5_l.shape[1]
-    print_dbg(f'{Level5_l.shape=}')
+    print_dbg(f'{Level5_l.shape}')
 
     Level6_l=Conv2D(filters=1024,kernel_size=(3,3),strides=3,kernel_regularizer=regularizers.l2(reg))(Level5_l)
     Level6_l=BatchNormalization(axis=-1)(Level6_l)
     Level6_l=Activation('relu')(Level6_l)
 
     Level6_l_size = Level6_l.shape[1]
-    print_dbg(f'{Level6_l.shape=}')
+    print_dbg(f'{Level6_l.shape}')
 
     padding = Level5_l_size - Level6_l_size*3
     Level5_r=Conv2DTranspose(filters=512,kernel_size=(3,3),strides=3,output_padding=(padding,padding),kernel_regularizer=regularizers.l2(reg))(Level6_l)
@@ -172,7 +172,7 @@ def make_unet():
     Level5_r=Activation('relu')(Level5_r)
 
     Level5_r_size = Level5_r.shape[1]
-    print_dbg(f'{Level5_r.shape=}')
+    print_dbg(f'{Level5_r.shape}')
     padding = Level4_l_size - Level5_r_size*2
     
     Level4_r=Conv2DTranspose(filters=256,kernel_size=(2,2),strides=2,output_padding=(padding,padding),kernel_regularizer=regularizers.l2(reg))(Level5_r)
@@ -193,7 +193,7 @@ def make_unet():
     Level4_r=Activation('relu')(Level4_r)
 
     Level4_r_size = Level4_r.shape[1]
-    print_dbg(f'{Level4_r.shape=}')
+    print_dbg(f'{Level4_r.shape}')
     padding = Level3_l_size - Level4_r_size*2
     
     Level3_r=Conv2DTranspose(filters=128,kernel_size=(2,2),strides=2,output_padding=(padding,padding),kernel_regularizer=regularizers.l2(reg))(Level4_r)
@@ -214,7 +214,7 @@ def make_unet():
     Level3_r=Activation('relu')(Level3_r)
 
     Level3_r_size = Level3_r.shape[1]
-    print_dbg(f'{Level3_r.shape=}')
+    print_dbg(f'{Level3_r.shape}')
     padding = Level2_l_size - Level3_r_size*2
     
     Level2_r=Conv2DTranspose(filters=64,kernel_size=(2,2),strides=2,output_padding=(padding,padding),kernel_regularizer=regularizers.l2(reg))(Level3_r)
@@ -235,7 +235,7 @@ def make_unet():
     Level2_r=Activation('relu')(Level2_r)
 
     Level2_r_size = Level2_r.shape[1]
-    print_dbg(f'{Level2_r.shape=}')
+    print_dbg(f'{Level2_r.shape}')
     padding = Level1_l_size - Level2_r_size*2
     
     Level1_r=Conv2DTranspose(filters=32,kernel_size=(2,2),output_padding=(padding,padding),strides=2,kernel_regularizer=regularizers.l2(reg))(Level2_r)

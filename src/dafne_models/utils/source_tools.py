@@ -1,4 +1,20 @@
 import ast
+import sys
+
+def extract_function_source_basic(source_code, function_name):
+    fn_found = False
+    fn_source = ''
+    for line in source_code.split('\n'):
+        if fn_found:
+            if not (line.startswith(' ') or line.startswith('\t')) and line.strip() != '':
+                # end of function definition
+                break
+            fn_source += line + '\n'
+        if 'def ' + function_name in line:
+            fn_found = True
+            fn_source = line + '\n'
+    return fn_source
+
 
 def extract_function_source(source_code, function_name):
     """
@@ -22,7 +38,6 @@ def extract_function_source(source_code, function_name):
             if node.name == self.function_name:
                 self.found_function = True
                 self.function_source = ast.unparse(node).strip()
-                return
             else:
                 self.generic_visit(node)
 

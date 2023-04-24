@@ -20,16 +20,15 @@ PATIENCE = 5
 VALIDATION_SPLIT = 0.2
 
 class PredictionUICallback(Callback, QObject):
-
     fit_signal = pyqtSignal(float, float, np.ndarray)
 
-    def __init__(self, test_image):
+    def __init__(self, test_image=None):
         Callback.__init__(self)
         QObject.__init__(self)
         self.min_val_loss = np.inf
         self.n_val_loss_increases = 0
         self.test_image = test_image
-        self.stop = False
+        self.do_stop = False
         self.best_weights = None
 
     @pyqtSlot(np.ndarray)
@@ -38,10 +37,10 @@ class PredictionUICallback(Callback, QObject):
 
     @pyqtSlot()
     def stop(self):
-        self.stop = True
+        self.do_stop = True
 
     def on_epoch_end(self, epoch, logs=None):
-        if self.stop:
+        if self.do_stop:
             self.model.stop_training = True
             return
 
@@ -259,7 +258,7 @@ class ModelTrainer(QWidget, Ui_ModelTrainerUI):
     @pyqtSlot()
     def val_slice_changed(self):
         try:
-            self.set_test_image.emit(self.val_image_list[self.val_slice_Slider.value()])
+            self.set_test_image.emit(self.val_image_list[self.slice_select_slider.value()])
         except IndexError:
             print("Validation slice out of range")
 
