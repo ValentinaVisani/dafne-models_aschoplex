@@ -1,7 +1,7 @@
 import os
 import time
 
-from PyQt5 import QtWidgets, QtGui
+from PyQt5 import QtWidgets, QtGui, QtCore
 from PyQt5.QtCore import pyqtSlot, pyqtSignal, QObject, QVariant
 
 import matplotlib.pyplot as plt
@@ -31,6 +31,14 @@ class PredictionUICallback(Callback, QObject):
         self.test_image = test_image
         self.stop = False
         self.best_weights = None
+
+    @pyqtSlot(np.ndarray)
+    def set_test_image(self, image):
+        self.test_image = image
+
+    @pyqtSlot()
+    def stop(self):
+        self.stop = True
 
     def on_epoch_end(self, epoch, logs=None):
         if self.stop:
@@ -67,38 +75,49 @@ class ModelTrainer(QWidget, Ui_ModelTrainerUI):
 
     set_progress_signal = pyqtSignal(int, str)
     start_fitting_signal = pyqtSignal()
+    end_fitting_signal = pyqtSignal()
+    set_test_image = pyqtSignal(np.ndarray)
     stop_fitting_signal = pyqtSignal()
 
     def __init__(self, parent=None):
         QWidget.__init__(self, parent)
         self.setupUi(self)
 
-        self.fit_output_box.hide()
+        self.setWindowTitle('Dafne Model Trainer')
+
+        #self.fit_output_box.hide()
         self.adjustSize()
         self.pyplot_layout = QtWidgets.QVBoxLayout(self.fit_output_box)
         self.pyplot_layout.setObjectName("pyplot_layout")
         self.data_dir = None
         self.fig = plt.figure()
         self.fig.tight_layout()
-        self.canvas = FigureCanvas(self.fig)
-        self.pyplot_layout.addWidget(self.canvas)
-
         self.fig.set_tight_layout(True)
-
+        self.canvas = FigureCanvas(self.fig)
         self.ax_left = self.fig.add_subplot(121)
         self.ax_right = self.fig.add_subplot(122)
         self.ax_right.set_title('Current output')
         self.ax_right.axis('off')
+
+        self.pyplot_layout.addWidget(self.canvas)
+        self.slice_select_slider = QtWidgets.QSlider(self.fit_output_box)
+        self.slice_select_slider.setOrientation(QtCore.Qt.Horizontal)
+        self.pyplot_layout.addWidget(self.slice_select_slider)
+        self.slice_select_slider.valueChanged.connect(self.val_slice_changed)
+        self.slice_select_slider.setRange(0, 0)
+
         self.choose_Button.clicked.connect(self.choose_data)
         self.save_choose_Button.clicked.connect(self.choose_save_location)
         self.set_progress_signal.connect(self.set_progress)
         self.start_fitting_signal.connect(self.start_fitting_slot)
-        self.stop_fitting_signal.connect(self.stop_fitting_slot)
+        self.end_fitting_signal.connect(self.stop_fitting_slot)
         self.fit_Button.clicked.connect(self.fit_clicked)
         self.is_fitting = False
         self.fitting_ui_callback = None
         self.loss_list = []
         self.val_loss_list = []
+        self.current_val_slice = 0
+        self.val_image_list = []
 
     def closeEvent(self, event: QtGui.QCloseEvent) -> None:
         if self.is_fitting:
@@ -177,6 +196,7 @@ class ModelTrainer(QWidget, Ui_ModelTrainerUI):
         create_model_function, apply_model_function, incremental_learn_function = get_model_functions(source)
         print(create_model_function)
         model = create_model_function()
+        print(model)
 
         n_datasets = len(data_list)
         n_validation = int(n_datasets * VALIDATION_SPLIT)
@@ -189,18 +209,30 @@ class ModelTrainer(QWidget, Ui_ModelTrainerUI):
 
         self.set_progress_signal.emit(30, 'Preparing data')
 
+        print('preparing data')
+
         training_generator, steps, x_val_list, y_val_list = prepare_data(training_data_list, validation_data_list,
                                                                          common_resolution, model_size, label_dict)
 
         self.set_progress_signal.emit(50, 'Training model')
 
-        self.fitting_ui_callback = PredictionUICallback(x_val_list[0])
+        self.fitting_ui_callback = PredictionUICallback()
+        self.val_image_list = x_val_list
         self.fitting_ui_callback.fit_signal.connect(self.update_plot)
+        self.set_test_image.connect(self.fitting_ui_callback.set_test_image)
+        self.stop_fitting_signal.connect(self.fitting_ui_callback.stop)
+        self.slice_select_slider.setMaximum(len(x_val_list) - 1)
+        if len(x_val_list) > 0:
+            self.set_test_image.emit(x_val_list[0])
+            self.slice_select_slider.setEnabled(True)
+        else:
+            self.slice_select_slider.setEnabled(False)
 
         trained_model, history = train_model(model, training_generator, steps, x_val_list, y_val_list, [self.fitting_ui_callback])
         if self.fitting_ui_callback.best_weights is not None:
             trained_model.set_weights(self.fitting_ui_callback.best_weights)
 
+        self.fitting_ui_callback.deleteLater()
         self.fitting_ui_callback = None
 
         self.set_progress_signal.emit(90, 'Saving model')
@@ -220,9 +252,16 @@ class ModelTrainer(QWidget, Ui_ModelTrainerUI):
         os.makedirs(os.path.join(self.model_dir, 'weights'), exist_ok=True)
         trained_model.save_weights(os.path.join(self.model_dir, 'weights', f'weights_{self.model_name}.hdf5'))
         self.set_progress_signal.emit(100, 'Done')
-        self.stop_fitting_signal.emit()
+        self.end_fitting_signal.emit()
         self.is_fitting = False
 
+
+    @pyqtSlot()
+    def val_slice_changed(self):
+        try:
+            self.set_test_image.emit(self.val_image_list[self.val_slice_Slider.value()])
+        except IndexError:
+            print("Validation slice out of range")
 
     @pyqtSlot(float, float, np.ndarray)
     def update_plot(self, loss, val_loss, label):
@@ -262,7 +301,8 @@ class ModelTrainer(QWidget, Ui_ModelTrainerUI):
         if self.is_fitting:
             #stop the fitting
             if self.fitting_ui_callback is not None:
-                self.fitting_ui_callback.stop = True
+                self.stop_fitting_signal.emit()
+                self.fit_Button.setText('Stopping...')
         else:
             self.fit()
 
