@@ -29,13 +29,13 @@ from dafne_dl.common.DataGenerators import DataGeneratorMem
 from dafne_dl.common.preprocess_train import common_input_process_single, input_creation_mem, weighted_loss
 from dafne_dl.labels.utils import invert_dict
 from tensorflow.keras import optimizers
-from scipy.ndimage import zoom
-from tensorflow.keras.callbacks import ReduceLROnPlateau, EarlyStopping, Callback
+from tensorflow.keras.callbacks import Callback
 
 VALIDATION_SPLIT = 0.2
 BATCH_SIZE = 5
 MAX_EPOCHS = 150
 PATIENCE = 5
+ENABLE_GUI = True
 
 # Get the path of the script's parent directory
 parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
@@ -92,6 +92,23 @@ def get_model_info(data_list):
 
     labels = sorted(labels)
 
+    n_labels = len(labels)
+    # find datasets with missing labels
+    missing_data_list = []
+    for i, data in data_list.enumerate():
+        n_existing_labels = 0
+        for label in labels:
+            if f'mask_{label}' not in data.keys() or data[f'mask_{label}'].sum() < 5:
+                print(f'Warning: dataset {i} is missing label {label}')
+            else:
+                n_existing_labels += 1
+        if n_existing_labels <= n_labels/2:
+            missing_data_list.append(i)
+
+    # remove datasets with missing labels
+    for i in missing_data_list[::-1]:
+        data_list.pop(i)
+
     # Crete a dictionary with indices for each label
     label_dict = {i+1: label for i, label in enumerate(labels)}
     return common_resolution, model_size, label_dict
@@ -117,8 +134,6 @@ def get_model_functions(source):
     model_create_fn = source_to_fn(extract_function_source(source, 'make_unet'))
     model_apply_fn = source_to_fn(extract_function_source(source, 'model_apply'))
     model_incremental_mem_fn = source_to_fn(extract_function_source(source, 'model_incremental_mem'))
-
-
     return model_create_fn, model_apply_fn, model_incremental_mem_fn
 
 
@@ -268,7 +283,8 @@ def train_model(model, training_generator, steps, x_val_list, y_val_list, custom
 
     # do the training
     if n_validation > 0:
-        plt.ion()
+        if ENABLE_GUI:
+            plt.ion()
         class PredictionCallback(Callback):
             def __init__(self):
                 super().__init__()
@@ -286,13 +302,14 @@ def train_model(model, training_generator, steps, x_val_list, y_val_list, custom
                 if self.n_val_loss_increases >= PATIENCE:
                     self.model.stop_training = True
 
-                segmentation = self.model.predict(np.expand_dims(x_val_list[0],0))
-                #plt.imshow(x_val_list[0][:,:,0])
-                #plt.figure()
-                label = np.argmax(np.squeeze(segmentation[0, :, :, :-1]), axis=2)
-                plt.imshow(label)
-                plt.show(block=False)
-                plt.pause(0.001)
+                if ENABLE_GUI:
+                    segmentation = self.model.predict(np.expand_dims(x_val_list[0],0))
+                    #plt.imshow(x_val_list[0][:,:,0])
+                    #plt.figure()
+                    label = np.argmax(np.squeeze(segmentation[0, :, :, :-1]), axis=2)
+                    plt.imshow(label)
+                    plt.show(block=False)
+                    plt.pause(0.001)
 
         prediction_callback = PredictionCallback()
 
@@ -393,10 +410,16 @@ def save_weights(model, model_name):
 
 
 def main():
+    global ENABLE_GUI
+
     parser = argparse.ArgumentParser()
     parser.add_argument("model_name", help="Name of the model to create")
     parser.add_argument("data_path", help="Path to data folder (containing the '*.npz' files)")
+    parser.add_argument("--no-gui", "-n", help="Disable the GUI", action="store_true")
     args = parser.parse_args()
+
+    if args.no_gui:
+        ENABLE_GUI = False
 
     dl_model, history = create_model(args.model_name, args.data_path)
 
@@ -405,10 +428,11 @@ def main():
     with open(f'{args.model_name}.model', 'wb') as f:
         dl_model.dump(f)
 
-    plt.plot(history.history['loss'])
-    plt.plot(history.history['val_loss'])
-    plt.legend(['train', 'validation'], loc='upper left')
-    plt.show()
+    if ENABLE_GUI:
+        plt.plot(history.history['loss'])
+        plt.plot(history.history['val_loss'])
+        plt.legend(['train', 'validation'], loc='upper left')
+        plt.show()
 
 
 if __name__ == '__main__':
