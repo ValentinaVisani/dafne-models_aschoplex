@@ -145,8 +145,6 @@ def convert_3d_mask_to_slices(mask_dictionary):
     :return: a list of dictionaries in the form {label: mask_2d}
     """
     mask_list = []
-    for label, mask in mask_dictionary.items():
-        print(label, mask.shape)
     for i in range(mask_dictionary[list(mask_dictionary.keys())[0]].shape[2]):
         mask_list.append({sanitize_label(label): mask[:, :, i] for label, mask in mask_dictionary.items()})
     return mask_list
@@ -169,12 +167,8 @@ def normalize_training_data(data_list, common_resolution, model_size, label_dict
 
     for data in data_list:
         img_3d = data['data']
-        print(img_3d.shape)
         image_list = [img_3d[:, :, i] for i in range(img_3d.shape[2])]
         training_data_dict = {'image_list': image_list, 'resolution': data['resolution'][:2]}
-        for key in data.keys():
-            if key.startswith('mask_'):
-                print(key, data[key].shape)
         mask_dictionary = {key[5:]: data[key] for key in data.keys() if key.startswith('mask_')}
         mask_list = convert_3d_mask_to_slices(mask_dictionary)
 
