@@ -210,6 +210,9 @@ def make_validation_list(data_list, common_resolution, model_size, label_dict):
         normalized_data_list, normalized_mask_list = normalize_training_data(data_list,
                                                                              common_resolution,
                                                                              model_size, label_dict)
+        if not normalized_data_list:
+            print('Warning! No valid validation data found!')
+            return [], []
         training_objects = generate_training_and_weights(normalized_data_list, normalized_mask_list)
         with open('validation_obj.pickle', 'wb') as f:
             pickle.dump(training_objects, f)
