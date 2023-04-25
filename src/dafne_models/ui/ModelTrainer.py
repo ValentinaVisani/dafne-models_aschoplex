@@ -1,6 +1,30 @@
 import os
 import time
 
+import tensorflow as tf
+
+tf.keras.backend.set_floatx('float16')
+gpus = tf.config.experimental.list_physical_devices("GPU")
+if gpus:
+    # Restrict TensorFlow to only use the first GPU
+    try:
+        for gpu in gpus:
+            tf.config.experimental.set_memory_growth(gpu, False)
+            tf.config.experimental.set_virtual_device_configuration(
+                gpu,
+                [
+                    tf.config.experimental.VirtualDeviceConfiguration(
+                        memory_limit=3*1024  # set your limit
+                    )
+                ],
+            )
+        tf.config.experimental.set_visible_devices(gpus[0], "GPU")
+        logical_gpus = tf.config.experimental.list_logical_devices("GPU")
+        print(len(gpus), "Physical GPUs,", len(logical_gpus), "Logical GPU")
+    except RuntimeError as e:
+        # Visible devices must be set before GPUs have been initialized
+        print(e)
+
 from PyQt5 import QtWidgets, QtGui, QtCore
 from PyQt5.QtCore import pyqtSlot, pyqtSignal, QObject, QVariant
 
@@ -19,6 +43,7 @@ from ..utils.ThreadHelpers import separate_thread_decorator
 PATIENCE = 5
 VALIDATION_SPLIT = 0.2
 
+
 class PredictionUICallback(Callback, QObject):
     fit_signal = pyqtSignal(float, float, np.ndarray)
 
@@ -33,11 +58,13 @@ class PredictionUICallback(Callback, QObject):
 
     @pyqtSlot(np.ndarray)
     def set_test_image(self, image):
+        print('Setting test image...')
         self.test_image = image
 
     @pyqtSlot()
     def stop(self):
         self.do_stop = True
+        print('Stopping training...')
 
     def on_epoch_end(self, epoch, logs=None):
         if self.do_stop:
@@ -75,8 +102,6 @@ class ModelTrainer(QWidget, Ui_ModelTrainerUI):
     set_progress_signal = pyqtSignal(int, str)
     start_fitting_signal = pyqtSignal()
     end_fitting_signal = pyqtSignal()
-    set_test_image = pyqtSignal(np.ndarray)
-    stop_fitting_signal = pyqtSignal()
 
     def __init__(self, parent=None):
         QWidget.__init__(self, parent)
@@ -84,7 +109,7 @@ class ModelTrainer(QWidget, Ui_ModelTrainerUI):
 
         self.setWindowTitle('Dafne Model Trainer')
 
-        #self.fit_output_box.hide()
+        self.fit_output_box.hide()
         self.adjustSize()
         self.pyplot_layout = QtWidgets.QVBoxLayout(self.fit_output_box)
         self.pyplot_layout.setObjectName("pyplot_layout")
@@ -193,9 +218,7 @@ class ModelTrainer(QWidget, Ui_ModelTrainerUI):
             f.write(source)
 
         create_model_function, apply_model_function, incremental_learn_function = get_model_functions(source)
-        print(create_model_function)
         model = create_model_function()
-        print(model)
 
         n_datasets = len(data_list)
         n_validation = int(n_datasets * VALIDATION_SPLIT)
@@ -258,7 +281,7 @@ class ModelTrainer(QWidget, Ui_ModelTrainerUI):
     @pyqtSlot()
     def val_slice_changed(self):
         try:
-            self.set_test_image.emit(self.val_image_list[self.slice_select_slider.value()])
+            self.fitting_ui_callback.set_test_image(self.val_image_list[self.slice_select_slider.value()])
         except IndexError:
             print("Validation slice out of range")
 
@@ -300,14 +323,16 @@ class ModelTrainer(QWidget, Ui_ModelTrainerUI):
         if self.is_fitting:
             #stop the fitting
             if self.fitting_ui_callback is not None:
-                self.stop_fitting_signal.emit()
+                self.fitting_ui_callback.stop()
                 self.fit_Button.setText('Stopping...')
         else:
             self.fit()
 
+
 def main():
     import sys
     app = QtWidgets.QApplication(sys.argv)
+    app.setApplicationName('Dafne Model trainer')
     window = ModelTrainer()
     window.show()
     sys.exit(app.exec_())

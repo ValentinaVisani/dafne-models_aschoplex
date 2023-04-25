@@ -5,9 +5,10 @@ import argparse
 import os
 import pickle
 import sys
+import time
 import uuid
 
-from dafne_dl.DynamicDLModel import source_to_fn
+from dafne_dl.DynamicDLModel import source_to_fn, DynamicDLModel
 
 assert sys.version_info.major == 3, "This software is only compatible with Python 3.x"
 
@@ -15,10 +16,8 @@ if sys.version_info.minor < 9:
     from ..utils.source_tools import extract_function_source_basic as extract_function_source
 else:
     from ..utils.source_tools import extract_function_source
+
 from .. import resources
-
-assert sys.version_info.major == 3, "This software is only compatible with Python 3.x"
-
 if sys.version_info.minor < 10:
     import importlib_resources as pkg_resources
 else:
@@ -43,6 +42,7 @@ parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
 # Add the parent directory to sys.path to import common
 sys.path.append(parent_dir)
 
+
 def load_data(data_path):
     """
     Load all the npz files in the folder
@@ -58,12 +58,14 @@ def load_data(data_path):
         data_list.append(npz_file)
     return data_list
 
+
 def sanitize_label(label):
     if label.endswith('_L'):
         label = label[:-2] + '_X'
     elif label.endswith('_R'):
         label = label[:-2] + '_Y'
     return label
+
 
 def get_model_info(data_list):
     """
@@ -196,7 +198,7 @@ def make_validation_list(data_list, common_resolution, model_size, label_dict):
         training_objects = generate_training_and_weights(normalized_data_list, normalized_mask_list)
         with open('validation_obj.pickle', 'wb') as f:
             pickle.dump(training_objects, f)
-    x_list = [np.stack([training_object[:,:,0], training_object[:,:,-1]], axis=-1) for training_object in training_objects]
+    x_list = [np.stack([training_object[:,:,0], training_object[:,:,-1]], axis=-1).astype(np.float16) for training_object in training_objects]
     y_list = [training_object[:,:,1:-1] for training_object in training_objects]
     #plt.imshow(x_list[0][:,:,0])
     #plt.figure()
@@ -233,6 +235,7 @@ def make_data_generator(data_list, common_resolution, model_size, label_dict):
                                                batch_size=BATCH_SIZE, dim=model_size)
 
     return data_generator, steps
+
 
 def prepare_data(training_data_list, validation_data_list, common_resolution, model_size, label_dict):
     training_generator, steps = make_data_generator(training_data_list, common_resolution, model_size, label_dict)
@@ -271,10 +274,12 @@ def train_model(model, training_generator, steps, x_val_list, y_val_list, custom
                 super().__init__()
                 self.min_val_loss = np.inf
                 self.n_val_loss_increases = 0
+                self.best_weights = None
             def on_epoch_end(self, epoch, logs=None):
                 if logs['val_loss'] < self.min_val_loss:
                     self.min_val_loss = logs['val_loss']
                     self.n_val_loss_increases = 0
+                    self.best_weights = self.model.get_weights()
                 elif logs['val_loss'] > self.min_val_loss:
                     self.n_val_loss_increases += 1
 
@@ -289,20 +294,27 @@ def train_model(model, training_generator, steps, x_val_list, y_val_list, custom
                 plt.show(block=False)
                 plt.pause(0.001)
 
+        prediction_callback = PredictionCallback()
+
         if custom_callbacks is None:
-            custom_callbacks = [PredictionCallback()]
+            custom_callbacks = [prediction_callback]
 
         history = model.fit(training_generator, epochs=MAX_EPOCHS,
                   steps_per_epoch=steps,
                   validation_data=(np.stack(x_val_list,0), np.stack(y_val_list,0)),
                   callbacks=custom_callbacks,
                   verbose=1)
+
+        if prediction_callback.best_weights is not None:
+            model.set_weights(prediction_callback.best_weights)
+
     else:
         if custom_callbacks is None:
             custom_callbacks = []
         history = model.fit(training_generator, epochs=MAX_EPOCHS, steps_per_epoch=steps, verbose=1, callbacks=custom_callbacks)
 
     return model, history
+
 
 def create_model_source(model_name, common_resolution, model_size, label_dict):
     """
@@ -327,12 +339,13 @@ def create_model_source(model_name, common_resolution, model_size, label_dict):
 
     return source, uuid
 
+
 def create_model(model_name, data_path):
     data_list = load_data(data_path)
 
     common_resolution, model_size, label_dict = get_model_info(data_list)
 
-    source, _ = create_model_source(model_name, common_resolution, model_size, label_dict)
+    source, model_id = create_model_source(model_name, common_resolution, model_size, label_dict)
 
     # write the new model generator script
     with open(f'generate_{model_name}_model.py', 'w') as f:
@@ -354,7 +367,16 @@ def create_model(model_name, data_path):
                                                                      common_resolution, model_size, label_dict)
 
     trained_model, history = train_model(model, training_generator, steps, x_val_list, y_val_list)
-    return trained_model, history
+
+    model_object = DynamicDLModel(model_id,
+                                  create_model_function,
+                                  apply_model_function,
+                                  incremental_learn_function=incremental_learn_function,
+                                  weights=trained_model.get_weights(),
+                                  timestamp_id=int(time.time())
+                                  )
+
+    return model_object, history
 
 
 def save_weights(model, model_name):
@@ -376,8 +398,12 @@ def main():
     parser.add_argument("data_path", help="Path to data folder (containing the '*.npz' files)")
     args = parser.parse_args()
 
-    model, history = create_model(args.model_name, args.data_path)
-    save_weights(model, args.model_name)
+    dl_model, history = create_model(args.model_name, args.data_path)
+
+    save_weights(dl_model.model, args.model_name)
+
+    with open(f'{args.model_name}.model', 'wb') as f:
+        dl_model.dump(f)
 
     plt.plot(history.history['loss'])
     plt.plot(history.history['val_loss'])
