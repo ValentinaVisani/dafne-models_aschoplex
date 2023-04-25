@@ -212,7 +212,7 @@ def make_validation_list(data_list, common_resolution, model_size, label_dict):
         if STORE_PREPROCESS:
             with open('validation_obj.pickle', 'wb') as f:
                 pickle.dump(training_objects, f)
-    x_list = [np.stack([training_object[:,:,0], training_object[:,:,-1]], axis=-1).astype(np.float16) for training_object in training_objects]
+    x_list = [np.stack([training_object[:,:,0], training_object[:,:,-1]], axis=-1) for training_object in training_objects]
     y_list = [training_object[:,:,1:-1] for training_object in training_objects]
     #plt.imshow(x_list[0][:,:,0])
     #plt.figure()
