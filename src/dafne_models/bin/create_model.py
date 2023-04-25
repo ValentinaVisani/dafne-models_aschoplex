@@ -292,6 +292,7 @@ def train_model(model, training_generator, steps, x_val_list, y_val_list, custom
                 self.n_val_loss_increases = 0
                 self.best_weights = None
             def on_epoch_end(self, epoch, logs=None):
+                if epoch < 20: return
                 if logs['val_loss'] < self.min_val_loss:
                     self.min_val_loss = logs['val_loss']
                     self.n_val_loss_increases = 0
