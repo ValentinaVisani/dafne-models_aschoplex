@@ -95,7 +95,7 @@ def get_model_info(data_list):
     n_labels = len(labels)
     # find datasets with missing labels
     missing_data_list = []
-    for i, data in data_list.enumerate():
+    for i, data in enumerate(data_list):
         n_existing_labels = 0
         for label in labels:
             if f'mask_{label}' not in data.keys() or data[f'mask_{label}'].sum() < 5:
