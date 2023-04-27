@@ -18,7 +18,7 @@ from ..bin.create_model import load_data, get_model_info, create_model_source, g
     prepare_data
 from ..utils.ThreadHelpers import separate_thread_decorator
 
-PATIENCE = 5
+PATIENCE = 10
 VALIDATION_SPLIT = 0.2
 
 
@@ -33,11 +33,15 @@ class PredictionUICallback(Callback, QObject):
         self.test_image = test_image
         self.do_stop = False
         self.best_weights = None
+        self.auto_stop_training = False
 
     @pyqtSlot(np.ndarray)
     def set_test_image(self, image):
-        print('Setting test image...')
         self.test_image = image
+
+    @pyqtSlot(bool)
+    def set_auto_stop_training(self, auto_stop):
+        self.auto_stop_training = auto_stop
 
     @pyqtSlot()
     def stop(self):
@@ -56,15 +60,18 @@ class PredictionUICallback(Callback, QObject):
 
         loss = logs['loss']
 
-        if epoch >= 20 and val_loss < self.min_val_loss:
-            self.min_val_loss = val_loss
-            self.n_val_loss_increases = 0
-            self.best_weights = self.model.get_weights()
-        elif val_loss > self.min_val_loss:
-            self.n_val_loss_increases += 1
+        if self.auto_stop_training:
+            if epoch >= 20 and val_loss < self.min_val_loss:
+                self.min_val_loss = val_loss
+                self.n_val_loss_increases = 0
+                self.best_weights = self.model.get_weights()
+            elif val_loss > self.min_val_loss:
+                self.n_val_loss_increases += 1
 
-        if self.n_val_loss_increases >= PATIENCE:
-            self.model.stop_training = True
+            if self.n_val_loss_increases >= PATIENCE:
+                self.model.stop_training = True
+        else:
+            self.best_weights = None
 
         if self.test_image is None:
             self.fit_signal.emit(loss, val_loss, np.zeros((10,10)))
@@ -102,11 +109,24 @@ class ModelTrainer(QWidget, Ui_ModelTrainerUI):
         self.ax_right.axis('off')
 
         self.pyplot_layout.addWidget(self.canvas)
-        self.slice_select_slider = QtWidgets.QSlider(self.fit_output_box)
+        self.bottom_widget = QWidget()
+        bottom_layout = QtWidgets.QHBoxLayout(self.bottom_widget)
+
+        bottom_layout.addWidget(QtWidgets.QLabel('Show validation slice:'))
+
+        self.slice_select_slider = QtWidgets.QSlider(self.bottom_widget)
         self.slice_select_slider.setOrientation(QtCore.Qt.Horizontal)
-        self.pyplot_layout.addWidget(self.slice_select_slider)
+        bottom_layout.addWidget(self.slice_select_slider)
         self.slice_select_slider.valueChanged.connect(self.val_slice_changed)
         self.slice_select_slider.setRange(0, 0)
+        self.slice_select_slider.setEnabled(False)
+
+        self.auto_stop_training_checkBox = QtWidgets.QCheckBox('Auto stop training', self.bottom_widget)
+        self.auto_stop_training_checkBox.setChecked(True)
+        self.auto_stop_training_checkBox.stateChanged.connect(self.auto_stop_training_changed)
+        bottom_layout.addWidget(self.auto_stop_training_checkBox)
+
+        self.pyplot_layout.addWidget(self.bottom_widget)
 
         self.choose_Button.clicked.connect(self.choose_data)
         self.save_choose_Button.clicked.connect(self.choose_save_location)
@@ -219,11 +239,10 @@ class ModelTrainer(QWidget, Ui_ModelTrainerUI):
         self.fitting_ui_callback = PredictionUICallback()
         self.val_image_list = x_val_list
         self.fitting_ui_callback.fit_signal.connect(self.update_plot)
-        self.set_test_image.connect(self.fitting_ui_callback.set_test_image)
-        self.stop_fitting_signal.connect(self.fitting_ui_callback.stop)
+        self.fitting_ui_callback.set_auto_stop_training(self.auto_stop_training_checkBox.isChecked())
         self.slice_select_slider.setMaximum(len(x_val_list) - 1)
         if len(x_val_list) > 0:
-            self.set_test_image.emit(x_val_list[0])
+            self.fitting_ui_callback.set_test_image(x_val_list[0])
             self.slice_select_slider.setEnabled(True)
         else:
             self.slice_select_slider.setEnabled(False)
@@ -255,9 +274,15 @@ class ModelTrainer(QWidget, Ui_ModelTrainerUI):
         self.end_fitting_signal.emit()
         self.is_fitting = False
 
+    @pyqtSlot(int)
+    def auto_stop_training_changed(self, checked):
+        if self.fitting_ui_callback is not None:
+            self.fitting_ui_callback.set_auto_stop_training(checked > 0)
 
     @pyqtSlot()
     def val_slice_changed(self):
+        if not self.fitting_ui_callback:
+            return
         try:
             self.fitting_ui_callback.set_test_image(self.val_image_list[self.slice_select_slider.value()])
         except IndexError:
@@ -291,10 +316,13 @@ class ModelTrainer(QWidget, Ui_ModelTrainerUI):
         self.adjustSize()
         self.choose_Button.setEnabled(False)
         self.save_choose_Button.setEnabled(False)
+        if self.val_image_list:
+            self.slice_select_slider.setEnabled(True)
 
     @pyqtSlot()
     def stop_fitting_slot(self):
         self.fit_Button.setText('Fit model')
+        self.slice_select_slider.setEnabled(False)
 
     @pyqtSlot()
     def fit_clicked(self):

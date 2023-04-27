@@ -33,7 +33,7 @@ from tensorflow.keras.callbacks import Callback
 
 VALIDATION_SPLIT = 0.2
 BATCH_SIZE = 5
-MAX_EPOCHS = 150
+MAX_EPOCHS = 400
 PATIENCE = 5
 ENABLE_GUI = True
 STORE_PREPROCESS = False # used for quick debugs
