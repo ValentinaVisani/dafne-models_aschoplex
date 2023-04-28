@@ -1,7 +1,7 @@
 import os
 import time
 
-import tensorflow as tf
+from dafne_dl import DynamicDLModel
 
 from PyQt5 import QtWidgets, QtGui, QtCore
 from PyQt5.QtCore import pyqtSlot, pyqtSignal, QObject, QVariant
@@ -9,7 +9,6 @@ from PyQt5.QtCore import pyqtSlot, pyqtSignal, QObject, QVariant
 import matplotlib.pyplot as plt
 import numpy as np
 from PyQt5.QtWidgets import QMessageBox, QFileDialog, QWidget
-from dafne_dl import DynamicDLModel
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from tensorflow.keras.callbacks import Callback
 
