@@ -89,7 +89,7 @@ def get_model_info(data_list):
         for key in data.keys():
             if key.startswith('mask_'):
                 label = key[5:]
-                labels.add(sanitize_label(label))
+                labels.add(label)
 
     labels = sorted(labels)
 
@@ -111,7 +111,7 @@ def get_model_info(data_list):
         data_list.pop(i)
 
     # Crete a dictionary with indices for each label
-    label_dict = {i+1: label for i, label in enumerate(labels)}
+    label_dict = {i+1: sanitize_label(label) for i, label in enumerate(labels)}
     return common_resolution, model_size, label_dict
 
 
