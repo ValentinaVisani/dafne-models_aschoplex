@@ -36,7 +36,16 @@ BATCH_SIZE = 5
 MAX_EPOCHS = 150
 PATIENCE = 5
 ENABLE_GUI = True
-STORE_PREPROCESS = False # used for quick debugs
+STORE_PREPROCESS = True # used for quick debugs
+
+DATA_PATH = None
+
+def set_data_path(path):
+    global DATA_PATH
+    DATA_PATH = path
+
+def get_data_path():
+    return DATA_PATH
 
 # Get the path of the script's parent directory
 parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
@@ -165,7 +174,8 @@ def normalize_training_data(data_list, common_resolution, model_size, label_dict
     all_slice_list = []
     all_masks_list = []
 
-    for data in data_list:
+    for i,data in enumerate(data_list):
+        print('Normalizing', i, '/', len(data_list))
         img_3d = data['data']
         image_list = [img_3d[:, :, i] for i in range(img_3d.shape[2])]
         training_data_dict = {'image_list': image_list, 'resolution': data['resolution'][:2]}
@@ -198,7 +208,7 @@ def make_validation_list(data_list, common_resolution, model_size, label_dict):
     :param label_dict: dictionary of the labels
     :return:
     """
-    if STORE_PREPROCESS and os.path.exists('validation_obj.pickle'):
+    if STORE_PREPROCESS and DATA_PATH and os.path.exists(os.path.join(DATA_PATH,'validation_obj.pickle')):
         with open('validation_obj.pickle', 'rb') as f:
             training_objects = pickle.load(f)
     else:
@@ -209,8 +219,8 @@ def make_validation_list(data_list, common_resolution, model_size, label_dict):
             print('Warning! No valid validation data found!')
             return [], []
         training_objects = generate_training_and_weights(normalized_data_list, normalized_mask_list)
-        if STORE_PREPROCESS:
-            with open('validation_obj.pickle', 'wb') as f:
+        if STORE_PREPROCESS and DATA_PATH:
+            with open(os.path.join(DATA_PATH, 'validation_obj.pickle'), 'wb') as f:
                 pickle.dump(training_objects, f)
     x_list = [np.stack([training_object[:,:,0], training_object[:,:,-1]], axis=-1) for training_object in training_objects]
     y_list = [training_object[:,:,1:-1] for training_object in training_objects]
@@ -232,7 +242,7 @@ def make_data_generator(data_list, common_resolution, model_size, label_dict):
     :param label_dict: dictionary of the labels
     :return:
     """
-    if STORE_PREPROCESS and os.path.exists('training_obj.pickle'):
+    if STORE_PREPROCESS and DATA_PATH and os.path.exists(os.path.join(DATA_PATH,'training_obj.pickle')):
         with open('training_obj.pickle', 'rb') as f:
             training_objects = pickle.load(f)
     else:
@@ -242,8 +252,8 @@ def make_data_generator(data_list, common_resolution, model_size, label_dict):
                                                                              model_size, label_dict)
         print("Generating training objects...")
         training_objects = generate_training_and_weights(normalized_data_list, normalized_mask_list)
-        if STORE_PREPROCESS:
-            with open('training_obj.pickle', 'wb') as f:
+        if STORE_PREPROCESS and DATA_PATH: 
+            with open(os.path.join(DATA_PATH, 'training_obj.pickle'), 'wb') as f:
                 pickle.dump(training_objects, f)
     steps = int(len(training_objects) / BATCH_SIZE)
     data_generator = DataGeneratorMem(training_objects, list_X=list(range(steps * BATCH_SIZE)),
@@ -359,7 +369,10 @@ def create_model_source(model_name, common_resolution, model_size, label_dict):
 
 
 def create_model(model_name, data_path):
+    global DATA_PATH
+
     data_list = load_data(data_path)
+    DATA_PATH = data_path
 
     common_resolution, model_size, label_dict = get_model_info(data_list)
 
