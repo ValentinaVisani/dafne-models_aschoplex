@@ -209,7 +209,7 @@ def make_validation_list(data_list, common_resolution, model_size, label_dict):
     :return:
     """
     if STORE_PREPROCESS and DATA_PATH and os.path.exists(os.path.join(DATA_PATH,'validation_obj.pickle')):
-        with open('validation_obj.pickle', 'rb') as f:
+        with open(os.path.join(DATA_PATH,'validation_obj.pickle'), 'rb') as f:
             training_objects = pickle.load(f)
     else:
         normalized_data_list, normalized_mask_list = normalize_training_data(data_list,
@@ -243,7 +243,7 @@ def make_data_generator(data_list, common_resolution, model_size, label_dict):
     :return:
     """
     if STORE_PREPROCESS and DATA_PATH and os.path.exists(os.path.join(DATA_PATH,'training_obj.pickle')):
-        with open('training_obj.pickle', 'rb') as f:
+        with open(os.path.join(DATA_PATH,'training_obj.pickle'), 'rb') as f:
             training_objects = pickle.load(f)
     else:
         print("Normalizing data...")
