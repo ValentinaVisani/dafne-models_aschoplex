@@ -14,7 +14,7 @@ from tensorflow.keras.callbacks import Callback
 
 from .ModelTrainer_Ui import Ui_ModelTrainerUI
 from ..bin.create_model import load_data, get_model_info, create_model_source, get_model_functions, train_model, \
-    prepare_data
+    prepare_data, set_data_path
 from ..utils.ThreadHelpers import separate_thread_decorator
 
 PATIENCE = 10
@@ -203,6 +203,7 @@ class ModelTrainer(QWidget, Ui_ModelTrainerUI):
         self.start_fitting_signal.emit()
         self.set_progress_signal.emit(0, 'Loading data')
         data_list = load_data(self.data_dir)
+        set_data_path(self.data_dir)
 
         self.set_progress_signal.emit(10, 'Getting model info')
         common_resolution, model_size, label_dict = get_model_info(data_list)
