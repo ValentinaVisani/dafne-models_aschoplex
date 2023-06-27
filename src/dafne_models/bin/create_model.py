@@ -35,14 +35,16 @@ VALIDATION_SPLIT = 0.2
 BATCH_SIZE = 5
 MAX_EPOCHS = 400
 PATIENCE = 5
-ENABLE_GUI = True
+ENABLE_GUI = False
 STORE_PREPROCESS = True # used for quick debugs
 
 DATA_PATH = None
 
+
 def set_data_path(path):
     global DATA_PATH
     DATA_PATH = path
+
 
 def get_data_path():
     return DATA_PATH
@@ -302,7 +304,7 @@ def train_model(model, training_generator, steps, x_val_list, y_val_list, custom
                 self.n_val_loss_increases = 0
                 self.best_weights = None
             def on_epoch_end(self, epoch, logs=None):
-                if epoch < 20: return
+                if epoch < 50: return
                 if logs['val_loss'] < self.min_val_loss:
                     self.min_val_loss = logs['val_loss']
                     self.n_val_loss_increases = 0
