@@ -35,7 +35,7 @@ def make_unet():
     N_LEVELS = %%N_LEVELS%%
     ## End of configuration.
 
-    DEBUG = False
+    DEBUG = True
 
     def print_dbg(*args, **kwargs):
         if DEBUG:
@@ -74,6 +74,7 @@ def make_unet():
         # Level1_l=InstanceNormalization(axis=-1)(Level1_l)  ## Instance Normalization. Use InstanceNormalization() for Layer Normalization.
         level = Add()([level, level_shortcut])
         level = Activation('relu')(level)
+        print_dbg("Down level with ", level.shape, ' filters ', filters, ' kernel_size ', kernel_size, ' strides ', strides)
         return level
 
     levels_down = []
@@ -83,11 +84,11 @@ def make_unet():
         levels_down.append(make_down_layer(levels_down[-1], current_filter_size, (2, 2), 2))
         current_filter_size *= 2
 
+    print_dbg('Bottom level with ', current_filter_size, ' filters')
     bottom_level=Conv2D(filters=current_filter_size,kernel_size=(2,2),strides=2,kernel_regularizer=regularizers.l2(reg))(levels_down[-1])
     bottom_level=BatchNormalization(axis=-1)(bottom_level)
     bottom_level=Activation('relu')(bottom_level)
-
-    levels_down.append(bottom_level)
+    print_dbg('Bottom level size ', bottom_level.shape)
 
     def calc_padding(level_down, level_up, strides):
         return level_down.shape[1] - level_up.shape[1] * strides
@@ -99,6 +100,8 @@ def make_unet():
         level_up_shortcut = level_up
         # Level4_r=InstanceNormalization(axis=-1)(Level4_r)  ## Instance Normalization. Use InstanceNormalization() for Layer Normalization.
         level_up = Activation('relu')(level_up)
+        print_dbg("Up level with ", level_up.shape, ' filters ', filters, ' kernel_size ', kernel_size, ' strides ',
+                  strides)
         merge5 = Concatenate(axis=-1)([down_layer, level_up])
         level_up = Conv2D(filters=filters, kernel_size=(3, 3), strides=1, padding='same',
                           kernel_regularizer=regularizers.l2(reg))(merge5)
