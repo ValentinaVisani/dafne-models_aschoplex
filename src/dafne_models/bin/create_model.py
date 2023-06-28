@@ -36,7 +36,9 @@ BATCH_SIZE = 5
 MAX_EPOCHS = 400
 PATIENCE = 5
 ENABLE_GUI = False
-STORE_PREPROCESS = True # used for quick debugs
+STORE_PREPROCESS = True
+FORCE_PREPROCESS = False
+PREPROCESS_ONLY = False
 
 DATA_PATH = None
 
@@ -210,7 +212,7 @@ def make_validation_list(data_list, common_resolution, model_size, label_dict):
     :param label_dict: dictionary of the labels
     :return:
     """
-    if STORE_PREPROCESS and DATA_PATH and os.path.exists(os.path.join(DATA_PATH,'validation_obj.pickle')):
+    if STORE_PREPROCESS and DATA_PATH and os.path.exists(os.path.join(DATA_PATH,'validation_obj.pickle')) and not FORCE_PREPROCESS:
         with open(os.path.join(DATA_PATH,'validation_obj.pickle'), 'rb') as f:
             training_objects = pickle.load(f)
     else:
@@ -244,7 +246,7 @@ def make_data_generator(data_list, common_resolution, model_size, label_dict):
     :param label_dict: dictionary of the labels
     :return:
     """
-    if STORE_PREPROCESS and DATA_PATH and os.path.exists(os.path.join(DATA_PATH,'training_obj.pickle')):
+    if STORE_PREPROCESS and DATA_PATH and os.path.exists(os.path.join(DATA_PATH,'training_obj.pickle')) and not FORCE_PREPROCESS:
         with open(os.path.join(DATA_PATH,'training_obj.pickle'), 'rb') as f:
             training_objects = pickle.load(f)
     else:
@@ -346,12 +348,13 @@ def train_model(model, training_generator, steps, x_val_list, y_val_list, custom
     return model, history
 
 
-def create_model_source(model_name, common_resolution, model_size, label_dict):
+def create_model_source(model_name, common_resolution, model_size, label_dict, levels=5):
     """
     Create the source code of the model
     :param common_resolution: resolution of the model
     :param model_size: size of the model
     :param label_dict: dictionary of the labels
+    :param levels: number of levels
     :return: the source code
     """
     # load the model template
@@ -366,11 +369,12 @@ def create_model_source(model_name, common_resolution, model_size, label_dict):
     source = source.replace('%%MODEL_SIZE%%', f'[{model_size[0]:d}, {model_size[1]:d}]')
     source = source.replace('%%MODEL_UID%%', f'"{model_uuid}"')
     source = source.replace('%%LABELS_DICT%%', str(label_dict))
+    source = source.replace('%%N_LEVELS%%', str(int(levels)))
 
     return source, uuid
 
 
-def create_model(model_name, data_path):
+def create_model(model_name, data_path, levels=5):
     global DATA_PATH
 
     data_list = load_data(data_path)
@@ -399,6 +403,9 @@ def create_model(model_name, data_path):
     training_generator, steps, x_val_list, y_val_list = prepare_data(training_data_list, validation_data_list,
                                                                      common_resolution, model_size, label_dict)
 
+    if PREPROCESS_ONLY:
+        return None, None
+
     trained_model, history = train_model(model, training_generator, steps, x_val_list, y_val_list)
 
     model_object = DynamicDLModel(model_id,
@@ -426,21 +433,33 @@ def save_weights(model, model_name):
 
 
 def main():
-    global ENABLE_GUI, VALIDATION_SPLIT
+    global ENABLE_GUI, VALIDATION_SPLIT, FORCE_PREPROCESS, PREPROCESS_ONLY
 
     parser = argparse.ArgumentParser()
     parser.add_argument("model_name", help="Name of the model to create")
     parser.add_argument("data_path", help="Path to data folder (containing the '*.npz' files)")
     parser.add_argument("--no-gui", "-n", help="Disable the GUI", action="store_true")
     parser.add_argument("--validation-split", "-s", help="Percentage of data to use for validation", type=float, default=0.2)
+    parser.add_argument("--levels", "-l", help="Number of levels of the model", type=int, default=5)
+    parser.add_argument("--preprocess-only", "-p", help="Only preprocess the data", action="store_true")
+    parser.add_argument("--force-preprocess", "-f", help="Force preprocessing of the data", action="store_true")
     args = parser.parse_args()
 
     if args.no_gui:
         ENABLE_GUI = False
 
+    if args.force_preprocess:
+        FORCE_PREPROCESS = True
+
+    if args.preprocess_only:
+        PREPROCESS_ONLY = True
+
     VALIDATION_SPLIT = args.validation_split
 
-    dl_model, history = create_model(args.model_name, args.data_path)
+    dl_model, history = create_model(args.model_name, args.data_path, args.levels)
+
+    if PREPROCESS_ONLY:
+        return
 
     save_weights(dl_model.model, args.model_name)
 
