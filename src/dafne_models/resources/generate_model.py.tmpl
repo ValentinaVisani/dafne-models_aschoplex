@@ -64,10 +64,12 @@ def make_unet():
         level = BatchNormalization(axis=-1)(level)
         level_shortcut = level  # Level1_l#
         level = Activation('relu')(level)
+        cur_kernel_size = 3 + 2*(n_conv_layers-1)
         for i in range(n_conv_layers-1):
-            level = Conv2D(filters=filters, kernel_size=(5, 5), strides=1, padding='same',
+            level = Conv2D(filters=filters, kernel_size=(cur_kernel_size, cur_kernel_size), strides=1, padding='same',
                           kernel_regularizer=regularizers.l2(reg))(
                           level)  # (Level1_l)# ##  kernel_initializer='glorot_uniform' is the default
+            cur_kernel_size -= 2
             level = BatchNormalization(axis=-1)(level)
             # Level1_l=InstanceNormalization(axis=-1)(Level1_l)  ## Instance Normalization. Use InstanceNormalization() for Layer Normalization.
             level = Activation('relu')(level)
@@ -107,13 +109,15 @@ def make_unet():
         print_dbg("Up level with ", level_up.shape, ' filters ', filters, ' kernel_size ', kernel_size, ' strides ',
                   strides)
         level_up = Concatenate(axis=-1)([down_layer, level_up])
+        cur_kernel_size = 3
         for i in range(n_conv_layers-1):
-            level_up = Conv2D(filters=filters, kernel_size=(5, 5), strides=1, padding='same',
+            level_up = Conv2D(filters=filters, kernel_size=(cur_kernel_size, cur_kernel_size), strides=1, padding='same',
                               kernel_regularizer=regularizers.l2(reg))(level_up)
+            cur_kernel_size += 2
             level_up = BatchNormalization(axis=-1)(level_up)
             level_up = Activation('relu')(level_up)
         # Level4_r=Dropout(0.5)(Level4_r)
-        level_up = Conv2D(filters=filters, kernel_size=(3, 3), strides=1, padding='same',
+        level_up = Conv2D(filters=filters, kernel_size=(cur_kernel_size, cur_kernel_size), strides=1, padding='same',
                           kernel_regularizer=regularizers.l2(reg))(level_up)
         level_up = BatchNormalization(axis=-1)(level_up)
         # Level4_r=InstanceNormalization(axis=-1)(Level4_r)  ## Instance Normalization. Use InstanceNormalization() for Layer Normalization.
