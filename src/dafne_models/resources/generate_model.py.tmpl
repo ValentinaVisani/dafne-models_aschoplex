@@ -82,8 +82,12 @@ def make_unet():
     levels_down = []
     levels_down.append(make_down_layer(reshape, 32, (1, 1), 1))
     current_filter_size = 32
+    current_kernel_size = 5
     for i in range(1, N_LEVELS):
-        levels_down.append(make_down_layer(levels_down[-1], current_filter_size, (2, 2), 2))
+        levels_down.append(make_down_layer(levels_down[-1], current_filter_size, (current_kernel_size, current_kernel_size), 2))
+        current_kernel_size -= 1
+        if current_kernel_size < 2:
+            current_kernel_size = 2
         current_filter_size *= 2
 
     print_dbg('Bottom level with ', current_filter_size, ' filters')
