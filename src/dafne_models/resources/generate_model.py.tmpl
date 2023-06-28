@@ -121,7 +121,7 @@ def make_unet():
 
     levels_up = []
     levels_up.append(bottom_level)
-    for level in range(N_LEVELS - 1, 0, -1):
+    for level in range(N_LEVELS - 1, -1, -1):
         current_filter_size //= 2
         down_level = levels_down[level]
         input_level = levels_up[-1]
