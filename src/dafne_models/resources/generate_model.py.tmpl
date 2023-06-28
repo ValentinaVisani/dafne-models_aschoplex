@@ -41,6 +41,8 @@ def make_unet():
         if DEBUG:
             print(*args, **kwargs)
 
+    print_dbg('N_LEVELS', N_LEVELS)
+
     OUTPUT_LAYERS = max(list(LABELS_DICT.keys())) + 1
 
     from tensorflow.keras import regularizers

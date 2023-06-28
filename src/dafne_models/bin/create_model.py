@@ -382,7 +382,7 @@ def create_model(model_name, data_path, levels=5):
 
     common_resolution, model_size, label_dict = get_model_info(data_list)
 
-    source, model_id = create_model_source(model_name, common_resolution, model_size, label_dict)
+    source, model_id = create_model_source(model_name, common_resolution, model_size, label_dict, levels)
 
     # write the new model generator script
     with open(f'generate_{model_name}_model.py', 'w') as f:
