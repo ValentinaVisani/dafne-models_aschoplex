@@ -348,7 +348,7 @@ def train_model(model, training_generator, steps, x_val_list, y_val_list, custom
     return model, history
 
 
-def create_model_source(model_name, common_resolution, model_size, label_dict, levels=5):
+def create_model_source(model_name, common_resolution, model_size, label_dict, levels=5, conv_layers=2):
     """
     Create the source code of the model
     :param common_resolution: resolution of the model
@@ -370,11 +370,12 @@ def create_model_source(model_name, common_resolution, model_size, label_dict, l
     source = source.replace('%%MODEL_UID%%', f'"{model_uuid}"')
     source = source.replace('%%LABELS_DICT%%', str(label_dict))
     source = source.replace('%%N_LEVELS%%', str(int(levels)))
+    source = source.replace('%%N_CONV_LAYERS%%', str(int(conv_layers)))
 
     return source, uuid
 
 
-def create_model(model_name, data_path, levels=5):
+def create_model(model_name, data_path, levels=5, conv_layers=2):
     global DATA_PATH
 
     data_list = load_data(data_path)
@@ -382,7 +383,7 @@ def create_model(model_name, data_path, levels=5):
 
     common_resolution, model_size, label_dict = get_model_info(data_list)
 
-    source, model_id = create_model_source(model_name, common_resolution, model_size, label_dict, levels)
+    source, model_id = create_model_source(model_name, common_resolution, model_size, label_dict, levels, conv_layers)
 
     # write the new model generator script
     with open(f'generate_{model_name}_model.py', 'w') as f:
@@ -441,6 +442,7 @@ def main():
     parser.add_argument("--no-gui", "-n", help="Disable the GUI", action="store_true")
     parser.add_argument("--validation-split", "-s", help="Percentage of data to use for validation", type=float, default=0.2)
     parser.add_argument("--levels", "-l", help="Number of levels of the model", type=int, default=5)
+    parser.add_argument("--conv-layers", "-c", help="Number of convolutional layers", type=int, default=2)
     parser.add_argument("--preprocess-only", "-p", help="Only preprocess the data", action="store_true")
     parser.add_argument("--force-preprocess", "-f", help="Force preprocessing of the data", action="store_true")
     args = parser.parse_args()
@@ -456,7 +458,7 @@ def main():
 
     VALIDATION_SPLIT = args.validation_split
 
-    dl_model, history = create_model(args.model_name, args.data_path, args.levels)
+    dl_model, history = create_model(args.model_name, args.data_path, args.levels, args.conv_layers)
 
     if PREPROCESS_ONLY:
         return
