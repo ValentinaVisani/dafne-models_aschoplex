@@ -65,7 +65,7 @@ def make_unet():
         level_shortcut = level  # Level1_l#
         level = Activation('relu')(level)
         for i in range(n_conv_layers-1):
-            level = Conv2D(filters=filters, kernel_size=(3, 3), strides=1, padding='same',
+            level = Conv2D(filters=filters, kernel_size=(5, 5), strides=1, padding='same',
                           kernel_regularizer=regularizers.l2(reg))(
                           level)  # (Level1_l)# ##  kernel_initializer='glorot_uniform' is the default
             level = BatchNormalization(axis=-1)(level)
@@ -108,7 +108,7 @@ def make_unet():
                   strides)
         level_up = Concatenate(axis=-1)([down_layer, level_up])
         for i in range(n_conv_layers-1):
-            level_up = Conv2D(filters=filters, kernel_size=(3, 3), strides=1, padding='same',
+            level_up = Conv2D(filters=filters, kernel_size=(5, 5), strides=1, padding='same',
                               kernel_regularizer=regularizers.l2(reg))(level_up)
             level_up = BatchNormalization(axis=-1)(level_up)
             level_up = Activation('relu')(level_up)
