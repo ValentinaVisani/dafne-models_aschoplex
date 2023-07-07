@@ -39,6 +39,7 @@ ENABLE_GUI = False
 STORE_PREPROCESS = True
 FORCE_PREPROCESS = False
 PREPROCESS_ONLY = False
+MIN_EPOCHS = 10
 
 DATA_PATH = None
 
@@ -306,7 +307,7 @@ def train_model(model, training_generator, steps, x_val_list, y_val_list, custom
                 self.n_val_loss_increases = 0
                 self.best_weights = None
             def on_epoch_end(self, epoch, logs=None):
-                if epoch < 20: return
+                if epoch < MIN_EPOCHS: return
                 if logs['val_loss'] < self.min_val_loss:
                     self.min_val_loss = logs['val_loss']
                     self.n_val_loss_increases = 0
@@ -434,7 +435,7 @@ def save_weights(model, model_name):
 
 
 def main():
-    global ENABLE_GUI, VALIDATION_SPLIT, FORCE_PREPROCESS, PREPROCESS_ONLY
+    global ENABLE_GUI, VALIDATION_SPLIT, FORCE_PREPROCESS, PREPROCESS_ONLY, MIN_EPOCHS
 
     parser = argparse.ArgumentParser()
     parser.add_argument("model_name", help="Name of the model to create")
@@ -445,6 +446,7 @@ def main():
     parser.add_argument("--conv-layers", "-c", help="Number of convolutional layers", type=int, default=2)
     parser.add_argument("--preprocess-only", "-p", help="Only preprocess the data", action="store_true")
     parser.add_argument("--force-preprocess", "-f", help="Force preprocessing of the data", action="store_true")
+    parser.add_argument("--min-epochs", "-m", help="Minimum number of epochs", type=int, default=10)
     args = parser.parse_args()
 
     if args.no_gui:
@@ -455,6 +457,8 @@ def main():
 
     if args.preprocess_only:
         PREPROCESS_ONLY = True
+
+    MIN_EPOCHS = args.min_epochs
 
     VALIDATION_SPLIT = args.validation_split
 
