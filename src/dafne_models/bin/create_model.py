@@ -464,7 +464,7 @@ def main():
 
     VALIDATION_SPLIT = args.validation_split
 
-    dl_model, history = create_model(args.model_name, args.data_path, args.levels, args.conv_layers, args.kerbnel_size)
+    dl_model, history = create_model(args.model_name, args.data_path, args.levels, args.conv_layers, args.kernel_size)
 
     if PREPROCESS_ONLY:
         return
