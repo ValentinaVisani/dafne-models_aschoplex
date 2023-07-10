@@ -377,13 +377,19 @@ def create_model_source(model_name, common_resolution, model_size, label_dict, l
     return source, uuid
 
 
-def create_model(model_name, data_path, levels=5, conv_layers=2, kernel_size=2):
+def create_model(model_name, data_path, levels=5, conv_layers=2, kernel_size=2, test_create_model=False):
     global DATA_PATH
 
-    data_list = load_data(data_path)
-    DATA_PATH = data_path
+    if test_create_model:
+        print("Testing model creation")
+        common_resolution = [0.5, 0.5]
+        model_size = [321, 321]
+        label_dict = {1: 'LK', 2:'RK'}
+    else:
+        data_list = load_data(data_path)
+        DATA_PATH = data_path
 
-    common_resolution, model_size, label_dict = get_model_info(data_list)
+        common_resolution, model_size, label_dict = get_model_info(data_list)
 
     source, model_id = create_model_source(model_name, common_resolution, model_size, label_dict, levels, conv_layers, kernel_size)
 
@@ -393,6 +399,9 @@ def create_model(model_name, data_path, levels=5, conv_layers=2, kernel_size=2):
 
     create_model_function, apply_model_function, incremental_learn_function = get_model_functions(source)
     model = create_model_function()
+
+    if test_create_model:
+        return None, None
 
     n_datasets = len(data_list)
     n_validation = int(n_datasets * VALIDATION_SPLIT)
@@ -449,6 +458,7 @@ def main():
     parser.add_argument("--preprocess-only", "-p", help="Only preprocess the data", action="store_true")
     parser.add_argument("--force-preprocess", "-f", help="Force preprocessing of the data", action="store_true")
     parser.add_argument("--min-epochs", "-m", help="Minimum number of epochs", type=int, default=10)
+    parser.add_argument("--test-model", "-t", help="Test the model creation", action="store_true")
     args = parser.parse_args()
 
     if args.no_gui:
@@ -464,9 +474,9 @@ def main():
 
     VALIDATION_SPLIT = args.validation_split
 
-    dl_model, history = create_model(args.model_name, args.data_path, args.levels, args.conv_layers, args.kernel_size)
+    dl_model, history = create_model(args.model_name, args.data_path, args.levels, args.conv_layers, args.kernel_size, args.test_model)
 
-    if PREPROCESS_ONLY:
+    if PREPROCESS_ONLY or args.test_model:
         return
 
     save_weights(dl_model.model, args.model_name)

@@ -61,6 +61,7 @@ def make_unet():
     reg=0.01
 
     def make_down_layer(input_layer, filters, kernel_size, strides, n_conv_layers = 2):
+        level = input_layer
         level = Conv2D(filters=filters, kernel_size=kernel_size, strides=strides, kernel_regularizer=regularizers.l2(reg))(input_layer)
         level = BatchNormalization(axis=-1)(level)
         level_shortcut = level  # Level1_l#
@@ -102,19 +103,22 @@ def make_unet():
     bottom_level=BatchNormalization(axis=-1)(bottom_level)
     bottom_level=Activation('relu')(bottom_level)
     print_dbg('Bottom level size ', bottom_level.shape)
+    kernel_sizes.append(2)
 
-    def calc_padding(level_down, level_up, strides):
-        return level_down.shape[1] - level_up.shape[1] * strides
+    def calc_padding(level_down, level_up, strides, kernel_size):
+        output_size = level_up.shape[1] * strides + kernel_size - strides
+        return level_down.shape[1] - output_size
 
     def make_up_layer(input_layer, down_layer, filters, kernel_size, strides, padding, n_conv_layers = 2):
-        level_up = Conv2DTranspose(filters=filters, kernel_size=kernel_size, strides=strides, padding='same', output_padding=(padding, padding),
-                                   kernel_regularizer=regularizers.l2(reg))(input_layer)
+        #print_dbg("Up level with input size ", input_layer.shape, 'down layer', down_layer.shape, 'filters ', filters, ' kernel_size ', kernel_size, ' strides ', strides, " output_padding ", padding)
+        level_up = Conv2DTranspose(filters=filters, kernel_size=kernel_size, strides=strides, output_padding=(padding, padding),
+                               kernel_regularizer=regularizers.l2(reg))(input_layer)
         level_up = BatchNormalization(axis=-1)(level_up)
         level_up_shortcut = level_up
         # Level4_r=InstanceNormalization(axis=-1)(Level4_r)  ## Instance Normalization. Use InstanceNormalization() for Layer Normalization.
         level_up = Activation('relu')(level_up)
         print_dbg("Up level with ", level_up.shape, ' filters ', filters, ' kernel_size ', kernel_size, ' strides ',
-                  strides)
+                  strides, "output_padding ", padding)
         level_up = Concatenate(axis=-1)([down_layer, level_up])
         cur_kernel_size = 3
         for i in range(n_conv_layers-1):
@@ -138,7 +142,7 @@ def make_unet():
         current_filter_size //= 2
         down_level = levels_down[level]
         input_level = levels_up[-1]
-        padding = calc_padding(down_level, input_level, 2)
+        padding = calc_padding(down_level, input_level, 2, kernel_sizes[level])
         levels_up.append(make_up_layer(input_level, down_level, current_filter_size, kernel_sizes[level], 2, padding, N_CONV_LAYERS))
 
     output=Conv2D(filters=OUTPUT_LAYERS,kernel_size=(1,1),strides=1,kernel_regularizer=regularizers.l2(reg))(levels_up[-1])
