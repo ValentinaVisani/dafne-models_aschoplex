@@ -34,6 +34,7 @@ def make_unet():
     MODEL_SIZE = %%MODEL_SIZE%%
     N_LEVELS = %%N_LEVELS%%
     N_CONV_LAYERS = %%N_CONV_LAYERS%%
+    INITIAL_KERNEL_SIZE = %%INITIAL_KERNEL_SIZE%%
     ## End of configuration.
 
     DEBUG = True
@@ -86,8 +87,14 @@ def make_unet():
     levels_down = []
     levels_down.append(make_down_layer(reshape, 32, (1, 1), 1, N_CONV_LAYERS))
     current_filter_size = 32
+    current_kernel_size = int(INITIAL_KERNEL_SIZE)
+    kernel_sizes = []
     for i in range(1, N_LEVELS):
-        levels_down.append(make_down_layer(levels_down[-1], current_filter_size, (2, 2), 2, N_CONV_LAYERS))
+        kernel_sizes.append(current_kernel_size)
+        levels_down.append(make_down_layer(levels_down[-1], current_filter_size, current_kernel_size, 2, N_CONV_LAYERS))
+        current_kernel_size -= 1
+        if current_kernel_size < 2:
+            current_kernel_size = 2
         current_filter_size *= 2
 
     print_dbg('Bottom level with ', current_filter_size, ' filters')
@@ -100,7 +107,7 @@ def make_unet():
         return level_down.shape[1] - level_up.shape[1] * strides
 
     def make_up_layer(input_layer, down_layer, filters, kernel_size, strides, padding, n_conv_layers = 2):
-        level_up = Conv2DTranspose(filters=filters, kernel_size=kernel_size, strides=strides, output_padding=(padding, padding),
+        level_up = Conv2DTranspose(filters=filters, kernel_size=kernel_size, strides=strides, padding='same', output_padding=(padding, padding),
                                    kernel_regularizer=regularizers.l2(reg))(input_layer)
         level_up = BatchNormalization(axis=-1)(level_up)
         level_up_shortcut = level_up
@@ -132,7 +139,7 @@ def make_unet():
         down_level = levels_down[level]
         input_level = levels_up[-1]
         padding = calc_padding(down_level, input_level, 2)
-        levels_up.append(make_up_layer(input_level, down_level, current_filter_size, (2, 2), 2, padding, N_CONV_LAYERS))
+        levels_up.append(make_up_layer(input_level, down_level, current_filter_size, kernel_sizes[level], 2, padding, N_CONV_LAYERS))
 
     output=Conv2D(filters=OUTPUT_LAYERS,kernel_size=(1,1),strides=1,kernel_regularizer=regularizers.l2(reg))(levels_up[-1])
     output=Lambda(lambda x : softmax(x,axis=-1))(output)
