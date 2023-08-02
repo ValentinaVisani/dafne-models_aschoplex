@@ -14,7 +14,7 @@ from tensorflow.keras.callbacks import Callback
 
 from .ModelTrainer_Ui import Ui_ModelTrainerUI
 from ..bin.create_model import load_data, get_model_info, create_model_source, get_model_functions, train_model, \
-    prepare_data, set_data_path
+    prepare_data, set_data_path, set_force_preprocess
 from ..utils.ThreadHelpers import separate_thread_decorator
 
 PATIENCE = 10
@@ -133,12 +133,15 @@ class ModelTrainer(QWidget, Ui_ModelTrainerUI):
         self.start_fitting_signal.connect(self.start_fitting_slot)
         self.end_fitting_signal.connect(self.stop_fitting_slot)
         self.fit_Button.clicked.connect(self.fit_clicked)
+        self.preprocess_Button.clicked.connect(self.preprocess_clicked)
+        self.force_preprocess_check.stateChanged.connect(self.decide_enable_fit)
         self.is_fitting = False
         self.fitting_ui_callback = None
         self.loss_list = []
         self.val_loss_list = []
         self.current_val_slice = 0
         self.val_image_list = []
+        self.preprocessed_data_exist = False
 
     def closeEvent(self, event: QtGui.QCloseEvent) -> None:
         if self.is_fitting:
@@ -147,9 +150,24 @@ class ModelTrainer(QWidget, Ui_ModelTrainerUI):
     def decide_enable_fit(self):
         if self.location_Text.text() and self.model_location_Text.text():
             self.fit_Button.setEnabled(True)
+            if not self.preprocessed_data_exist or self.force_preprocess_check.isChecked():
+                self.preprocess_Button.setEnabled(True)
+            else:
+                self.preprocess_Button.setEnabled(False)
         else:
             self.fit_Button.setEnabled(False)
+            self.preprocess_Button.setEnabled(False)
             self.set_progress(0, '')
+
+    def decide_preprocess(self):
+        if os.path.exists(os.path.join(self.data_dir, 'training_obj.pickle')):
+            self.preprocessed_data_exist = True
+            self.force_preprocess_check.setEnabled(True)
+            self.force_preprocess_check.setChecked(False)
+        else:
+            self.preprocessed_data_exist = False
+            self.force_preprocess_check.setEnabled(False)
+            self.force_preprocess_check.setChecked(True)
 
     @pyqtSlot()
     def choose_data(self):
@@ -171,6 +189,7 @@ class ModelTrainer(QWidget, Ui_ModelTrainerUI):
         if len(npz_files) > 0:
             self.save_choose_Button.setEnabled(True)
             self.location_Text.setText(self.data_dir)
+            self.decide_preprocess()
             self.decide_enable_fit()
         else:
             invalid()
@@ -197,8 +216,9 @@ class ModelTrainer(QWidget, Ui_ModelTrainerUI):
             invalid()
 
     @pyqtSlot()
+    @pyqtSlot(bool)
     @separate_thread_decorator
-    def fit(self):
+    def fit(self, preprocess_only=False):
         self.is_fitting = True
         self.start_fitting_signal.emit()
         self.set_progress_signal.emit(0, 'Loading data')
@@ -208,8 +228,14 @@ class ModelTrainer(QWidget, Ui_ModelTrainerUI):
         self.set_progress_signal.emit(10, 'Getting model info')
         common_resolution, model_size, label_dict = get_model_info(data_list)
 
+        levels = self.levels_spin.value()
+        conv_layers = self.convlayers_spin.value()
+        kernel_size = self.kernsize_spin.value()
+
+        set_force_preprocess(self.force_preprocess_check.isChecked())
+
         self.set_progress_signal.emit(20, 'Creating model')
-        source, model_uuid = create_model_source(self.model_name, common_resolution, model_size, label_dict)
+        source, model_uuid = create_model_source(self.model_name, common_resolution, model_size, label_dict, levels, conv_layers, kernel_size)
 
         # write the new model generator script
         with open(os.path.join(self.model_dir, f'generate_{self.model_name}_model.py'), 'w') as f:
@@ -233,6 +259,11 @@ class ModelTrainer(QWidget, Ui_ModelTrainerUI):
 
         training_generator, steps, x_val_list, y_val_list = prepare_data(training_data_list, validation_data_list,
                                                                          common_resolution, model_size, label_dict)
+
+        if preprocess_only:
+            self.set_progress_signal.emit(100, 'Done')
+            self.end_fitting_signal.emit()
+            self.is_fitting = False
 
         self.set_progress_signal.emit(50, 'Training model')
 
@@ -312,6 +343,7 @@ class ModelTrainer(QWidget, Ui_ModelTrainerUI):
         self.loss_list = []
         self.val_loss_list = []
         self.fit_Button.setText('Stop fitting')
+        self.preprocess_Button.setEnabled(False)
         self.fit_output_box.show()
         self.adjustSize()
         self.choose_Button.setEnabled(False)
@@ -323,6 +355,11 @@ class ModelTrainer(QWidget, Ui_ModelTrainerUI):
     def stop_fitting_slot(self):
         self.fit_Button.setText('Fit model')
         self.slice_select_slider.setEnabled(False)
+        self.decide_enable_fit()
+
+    @pyqtSlot()
+    def preprocess_clicked(self):
+        self.fit(True)
 
     @pyqtSlot()
     def fit_clicked(self):

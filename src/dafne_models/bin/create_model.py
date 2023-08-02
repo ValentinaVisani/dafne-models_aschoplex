@@ -52,6 +52,16 @@ def set_data_path(path):
 def get_data_path():
     return DATA_PATH
 
+
+def set_force_preprocess(force):
+    global FORCE_PREPROCESS
+    FORCE_PREPROCESS = force
+
+
+def get_force_preprocess():
+    return FORCE_PREPROCESS
+
+
 # Get the path of the script's parent directory
 parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
 # Add the parent directory to sys.path to import common
