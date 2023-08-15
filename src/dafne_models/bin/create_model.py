@@ -31,7 +31,6 @@ from dafne_dl.labels.utils import invert_dict
 from tensorflow.keras import optimizers
 from tensorflow.keras.callbacks import Callback
 
-VALIDATION_SPLIT = 0.2
 BATCH_SIZE = 5
 MAX_EPOCHS = 400
 PATIENCE = 5
@@ -190,9 +189,9 @@ def normalize_training_data(data_list, common_resolution, model_size, label_dict
     all_masks_list = []
 
     for i,data in enumerate(data_list):
-        print('Normalizing', i, '/', len(data_list))
+        print('Normalizing', i+1, '/', len(data_list))
         img_3d = data['data']
-        image_list = [img_3d[:, :, i] for i in range(img_3d.shape[2])]
+        image_list = [img_3d[:, :, i].astype(np.float32) for i in range(img_3d.shape[2])]
         training_data_dict = {'image_list': image_list, 'resolution': data['resolution'][:2]}
         mask_dictionary = {key[5:]: data[key] for key in data.keys() if key.startswith('mask_')}
         mask_list = convert_3d_mask_to_slices(mask_dictionary)
@@ -414,7 +413,11 @@ def create_model(model_name, data_path, levels=5, conv_layers=2, kernel_size=2, 
         return None, None
 
     n_datasets = len(data_list)
-    n_validation = int(n_datasets * VALIDATION_SPLIT)
+    if n_datasets < 10:
+        validation_split = 0.2
+    else:
+        validation_split = 0.1
+    n_validation = int(n_datasets * validation_split)
 
     if n_validation == 0:
         print("WARNING: No validation data will be used")
@@ -455,13 +458,12 @@ def save_weights(model, model_name):
 
 
 def main():
-    global ENABLE_GUI, VALIDATION_SPLIT, FORCE_PREPROCESS, PREPROCESS_ONLY, MIN_EPOCHS
+    global ENABLE_GUI, FORCE_PREPROCESS, PREPROCESS_ONLY, MIN_EPOCHS
 
     parser = argparse.ArgumentParser()
     parser.add_argument("model_name", help="Name of the model to create")
     parser.add_argument("data_path", help="Path to data folder (containing the '*.npz' files)")
     parser.add_argument("--no-gui", "-n", help="Disable the GUI", action="store_true")
-    parser.add_argument("--validation-split", "-s", help="Percentage of data to use for validation", type=float, default=0.2)
     parser.add_argument("--levels", "-l", help="Number of levels of the model", type=int, default=5)
     parser.add_argument("--conv-layers", "-c", help="Number of convolutional layers", type=int, default=2)
     parser.add_argument("--kernel-size", "-k", help="Initial size of the kernel", type=int, default=2)
@@ -481,8 +483,6 @@ def main():
         PREPROCESS_ONLY = True
 
     MIN_EPOCHS = args.min_epochs
-
-    VALIDATION_SPLIT = args.validation_split
 
     dl_model, history = create_model(args.model_name, args.data_path, args.levels, args.conv_layers, args.kernel_size, args.test_model)
 
