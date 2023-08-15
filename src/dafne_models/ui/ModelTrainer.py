@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from PyQt5.QtWidgets import QMessageBox, QFileDialog, QWidget
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.ticker import FuncFormatter
 from tensorflow.keras.callbacks import Callback
 
 from .ModelTrainer_Ui import Ui_ModelTrainerUI
@@ -17,8 +18,7 @@ from ..bin.create_model import load_data, get_model_info, create_model_source, g
     prepare_data, set_data_path, set_force_preprocess
 from ..utils.ThreadHelpers import separate_thread_decorator
 
-PATIENCE = 10
-VALIDATION_SPLIT = 0.2
+PATIENCE = 20
 
 
 class PredictionUICallback(Callback, QObject):
@@ -60,7 +60,7 @@ class PredictionUICallback(Callback, QObject):
         loss = logs['loss']
 
         if self.auto_stop_training:
-            if epoch >= 20 and val_loss < self.min_val_loss:
+            if epoch >= PATIENCE and val_loss < self.min_val_loss:
                 self.min_val_loss = val_loss
                 self.n_val_loss_increases = 0
                 self.best_weights = self.model.get_weights()
@@ -71,6 +71,7 @@ class PredictionUICallback(Callback, QObject):
                 self.model.stop_training = True
         else:
             self.best_weights = None
+            self.min_val_loss = np.inf
 
         if self.test_image is None:
             self.fit_signal.emit(loss, val_loss, np.zeros((10,10)))
@@ -92,7 +93,7 @@ class ModelTrainer(QWidget, Ui_ModelTrainerUI):
         self.setupUi(self)
 
         self.setWindowTitle('Dafne Model Trainer')
-
+        self.advanced_widget.hide()
         self.fit_output_box.hide()
         self.adjustSize()
         self.pyplot_layout = QtWidgets.QVBoxLayout(self.fit_output_box)
@@ -103,6 +104,7 @@ class ModelTrainer(QWidget, Ui_ModelTrainerUI):
         self.fig.set_tight_layout(True)
         self.canvas = FigureCanvas(self.fig)
         self.ax_left = self.fig.add_subplot(121)
+        self.ax_left_twin = self.ax_left.twinx()
         self.ax_right = self.fig.add_subplot(122)
         self.ax_right.set_title('Current output')
         self.ax_right.axis('off')
@@ -127,6 +129,7 @@ class ModelTrainer(QWidget, Ui_ModelTrainerUI):
 
         self.pyplot_layout.addWidget(self.bottom_widget)
 
+        self.advanced_button.clicked.connect(self.show_advanced)
         self.choose_Button.clicked.connect(self.choose_data)
         self.save_choose_Button.clicked.connect(self.choose_save_location)
         self.set_progress_signal.connect(self.set_progress)
@@ -142,6 +145,12 @@ class ModelTrainer(QWidget, Ui_ModelTrainerUI):
         self.current_val_slice = 0
         self.val_image_list = []
         self.preprocessed_data_exist = False
+
+    @pyqtSlot()
+    def show_advanced(self):
+        self.advanced_widget.show()
+        self.advanced_button.hide()
+        self.adjustSize()
 
     def closeEvent(self, event: QtGui.QCloseEvent) -> None:
         if self.is_fitting:
@@ -249,7 +258,12 @@ class ModelTrainer(QWidget, Ui_ModelTrainerUI):
         model = create_model_function()
 
         n_datasets = len(data_list)
-        n_validation = int(n_datasets * VALIDATION_SPLIT)
+        if n_datasets < 10:
+            validation_split = 0.2
+        else:
+            validation_split = 0.1
+
+        n_validation = int(n_datasets * validation_split)
 
         if n_validation == 0:
             print("WARNING: No validation data will be used")
@@ -328,10 +342,18 @@ class ModelTrainer(QWidget, Ui_ModelTrainerUI):
     def update_plot(self, loss, val_loss, label):
         self.loss_list.append(loss)
         self.val_loss_list.append(val_loss)
+
+        y_axis_formatter = FuncFormatter(lambda y, _: '{:.1g}'.format(y))
+
         self.ax_left.clear()
-        self.ax_left.plot(self.loss_list)
-        self.ax_left.plot(self.val_loss_list)
-        self.ax_left.legend(['train', 'validation'], loc='upper right')
+        self.ax_left.plot(self.loss_list, color='#E66100', label='train')
+        self.ax_left.set_ylabel('Training loss', color='#E66100')
+        self.ax_left.yaxis.set_major_formatter(y_axis_formatter)
+        self.ax_left_twin.clear()
+        self.ax_left_twin.plot(self.val_loss_list, color='#5D3A9B', label='validation')
+        self.ax_left_twin.set_ylabel('Validation loss', color='#5D3A9B')
+        self.ax_left_twin.yaxis.set_label_position('right')
+        self.ax_left_twin.yaxis.set_major_formatter(y_axis_formatter)
         self.ax_right.clear()
         self.ax_right.set_title('Current output')
         self.ax_right.imshow(label)
@@ -353,6 +375,8 @@ class ModelTrainer(QWidget, Ui_ModelTrainerUI):
         self.adjustSize()
         self.choose_Button.setEnabled(False)
         self.save_choose_Button.setEnabled(False)
+        self.advanced_widget.setEnabled(False)
+        self.advanced_button.setEnabled(False)
         if self.val_image_list:
             self.slice_select_slider.setEnabled(True)
 
@@ -360,6 +384,8 @@ class ModelTrainer(QWidget, Ui_ModelTrainerUI):
     def stop_fitting_slot(self):
         self.fit_Button.setText('Fit model')
         self.slice_select_slider.setEnabled(False)
+        self.advanced_widget.setEnabled(True)
+        self.advanced_button.setEnabled(True)
         self.decide_preprocess()
         self.decide_enable_fit()
 
