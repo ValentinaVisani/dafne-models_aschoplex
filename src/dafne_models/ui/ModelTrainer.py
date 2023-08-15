@@ -18,7 +18,8 @@ from ..bin.create_model import load_data, get_model_info, create_model_source, g
     prepare_data, set_data_path, set_force_preprocess
 from ..utils.ThreadHelpers import separate_thread_decorator
 
-PATIENCE = 20
+PATIENCE = 10
+MIN_EPOCHS = 20
 
 
 class PredictionUICallback(Callback, QObject):
@@ -60,7 +61,7 @@ class PredictionUICallback(Callback, QObject):
         loss = logs['loss']
 
         if self.auto_stop_training:
-            if epoch >= PATIENCE and val_loss < self.min_val_loss:
+            if epoch >= MIN_EPOCHS and val_loss < self.min_val_loss:
                 self.min_val_loss = val_loss
                 self.n_val_loss_increases = 0
                 self.best_weights = self.model.get_weights()
