@@ -192,7 +192,7 @@ def normalize_training_data(data_list, common_resolution, model_size, label_dict
     for i,data in enumerate(data_list):
         print('Normalizing', i, '/', len(data_list))
         img_3d = data['data']
-        image_list = [img_3d[:, :, i] for i in range(img_3d.shape[2])]
+        image_list = [img_3d[:, :, i].astype(np.float32) for i in range(img_3d.shape[2])]
         training_data_dict = {'image_list': image_list, 'resolution': data['resolution'][:2]}
         mask_dictionary = {key[5:]: data[key] for key in data.keys() if key.startswith('mask_')}
         mask_list = convert_3d_mask_to_slices(mask_dictionary)

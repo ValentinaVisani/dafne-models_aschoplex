@@ -148,6 +148,10 @@ class ModelTrainer(QWidget, Ui_ModelTrainerUI):
             event.ignore()
 
     def decide_enable_fit(self):
+        if self.preprocessed_data_exist and not self.force_preprocess_check.isChecked():
+            self.fit_Button.setText('Fit')
+        else:
+            self.fit_Button.setText('Preprocess + fit')
         if self.location_Text.text() and self.model_location_Text.text():
             self.fit_Button.setEnabled(True)
             if not self.preprocessed_data_exist or self.force_preprocess_check.isChecked():
@@ -264,6 +268,7 @@ class ModelTrainer(QWidget, Ui_ModelTrainerUI):
             self.set_progress_signal.emit(100, 'Done')
             self.end_fitting_signal.emit()
             self.is_fitting = False
+            return
 
         self.set_progress_signal.emit(50, 'Training model')
 
@@ -355,6 +360,7 @@ class ModelTrainer(QWidget, Ui_ModelTrainerUI):
     def stop_fitting_slot(self):
         self.fit_Button.setText('Fit model')
         self.slice_select_slider.setEnabled(False)
+        self.decide_preprocess()
         self.decide_enable_fit()
 
     @pyqtSlot()
