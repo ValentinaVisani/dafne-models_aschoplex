@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from PyQt5.QtWidgets import QMessageBox, QFileDialog, QWidget
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.colors import ListedColormap
 from tensorflow.keras.callbacks import Callback
 
 from .ModelTrainer_Ui import Ui_ModelTrainerUI
@@ -20,9 +21,8 @@ from ..utils.ThreadHelpers import separate_thread_decorator
 PATIENCE = 10
 VALIDATION_SPLIT = 0.2
 
-
 class PredictionUICallback(Callback, QObject):
-    fit_signal = pyqtSignal(float, float, np.ndarray)
+    fit_signal = pyqtSignal(float, float, np.ndarray, np.ndarray)
 
     def __init__(self, test_image=None):
         Callback.__init__(self)
@@ -78,7 +78,7 @@ class PredictionUICallback(Callback, QObject):
 
         segmentation = self.model.predict(np.expand_dims(self.test_image, 0))
         label = np.argmax(np.squeeze(segmentation[0, :, :, :-1]), axis=2)
-        self.fit_signal.emit(loss, val_loss, label)
+        self.fit_signal.emit(loss, val_loss, self.test_image[:, :, 0], label)
 
 
 class ModelTrainer(QWidget, Ui_ModelTrainerUI):
@@ -260,10 +260,13 @@ class ModelTrainer(QWidget, Ui_ModelTrainerUI):
         training_generator, steps, x_val_list, y_val_list = prepare_data(training_data_list, validation_data_list,
                                                                          common_resolution, model_size, label_dict)
 
+        print(f'{x_val_list[0].shape=}')
+
         if preprocess_only:
             self.set_progress_signal.emit(100, 'Done')
             self.end_fitting_signal.emit()
             self.is_fitting = False
+            return
 
         self.set_progress_signal.emit(50, 'Training model')
 
@@ -319,8 +322,22 @@ class ModelTrainer(QWidget, Ui_ModelTrainerUI):
         except IndexError:
             print("Validation slice out of range")
 
-    @pyqtSlot(float, float, np.ndarray)
-    def update_plot(self, loss, val_loss, label):
+    @pyqtSlot(float, float, np.ndarray, np.ndarray)
+    def update_plot(self, loss, val_loss, image, label):
+        # Define the number of segments (including the transparent color for zero)
+        num_segments = 21
+
+        # Create a list of colors with varying alpha values
+        colors = [(0, 0, 0, 0)]  # Transparent color for zero
+        for i in range(1, num_segments):
+            # Generate distinguishable colors using HSV color space
+            color = plt.cm.get_cmap('hsv', num_segments)(i)
+            color = (color[0], color[1], color[2], 0.5)
+            colors.append(color)
+
+        # Create the colormap
+        labels_colormap = ListedColormap(colors)
+
         self.loss_list.append(loss)
         self.val_loss_list.append(val_loss)
         self.ax_left.clear()
@@ -329,7 +346,8 @@ class ModelTrainer(QWidget, Ui_ModelTrainerUI):
         self.ax_left.legend(['train', 'validation'], loc='upper right')
         self.ax_right.clear()
         self.ax_right.set_title('Current output')
-        self.ax_right.imshow(label)
+        self.ax_right.imshow(image, cmap='gray')
+        self.ax_right.imshow(label, cmap=labels_colormap)
         self.ax_right.axis('off')
         self.canvas.draw()
 
