@@ -169,7 +169,7 @@ def convert_3d_mask_to_slices(mask_dictionary):
     """
     mask_list = []
     for i in range(mask_dictionary[list(mask_dictionary.keys())[0]].shape[2]):
-        mask_list.append({sanitize_label(label): mask[:, :, i] for label, mask in mask_dictionary.items()})
+        mask_list.append({sanitize_label(label): (mask[:, :, i] > 0).astype(np.uint8) for label, mask in mask_dictionary.items()})
     return mask_list
 
 

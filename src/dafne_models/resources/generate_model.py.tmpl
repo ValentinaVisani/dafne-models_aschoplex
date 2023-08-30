@@ -241,7 +241,7 @@ def model_incremental_mem(modelObj: DynamicDLModel, trainingData: dict, training
     card = len(image_list)
     steps = int(float(card) / BATCH_SIZE)
 
-    print(f'Incremental learning for thigh with {nImages} images')
+    print(f'Incremental learning with {nImages} images')
     t = time.time()
 
     netc = modelObj.model
