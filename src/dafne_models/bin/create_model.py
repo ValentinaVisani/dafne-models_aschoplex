@@ -39,6 +39,7 @@ STORE_PREPROCESS = True
 FORCE_PREPROCESS = False
 PREPROCESS_ONLY = False
 MIN_EPOCHS = 10
+MAX_INPUT_SIZE = 256
 
 DATA_PATH = None
 
@@ -104,6 +105,10 @@ def get_model_info(data_list):
     # find the maximum size normalized to the common resolution
     max_size = [np.ceil(data['data'].shape[:2]*data['resolution'][:2] / common_resolution).max() for data in data_list]
     max_size = int(max(max_size))
+    if max_size > MAX_INPUT_SIZE:
+        zoom_factor = MAX_INPUT_SIZE / max_size
+        common_resolution = common_resolution / zoom_factor
+        max_size = MAX_INPUT_SIZE
     model_size = (max_size, max_size)
 
     # Create a set with all the different labels present in the files
