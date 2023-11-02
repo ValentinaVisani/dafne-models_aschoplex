@@ -368,8 +368,12 @@ def create_model_source(model_name, common_resolution, model_size, label_dict, l
     :return: the source code
     """
     # load the model template
-    with pkg_resources.files(resources).joinpath('generate_model.py.tmpl').open() as f:
-        source = f.read()
+    if getattr(sys, '_MEIPASS', None): # PyInstaller support. If _MEIPASS is set, we are in a Pyinstaller environment
+        with open(os.path.join(sys._MEIPASS, 'resources', 'generate_model.py.tmpl'), 'r') as f:
+            source = f.read()
+    else:
+        with pkg_resources.files(resources).joinpath('generate_model.py.tmpl').open() as f:
+            source = f.read()
 
     model_uuid = str(uuid.uuid4())
 
