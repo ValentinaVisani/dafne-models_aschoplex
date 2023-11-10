@@ -285,6 +285,7 @@ class ModelTrainer(QWidget, Ui_ModelTrainerUI):
             self.set_progress_signal.emit(100, 'Done')
             self.end_fitting_signal.emit()
             self.is_fitting = False
+            QMessageBox.information(self, "Information", "Preprocess done")
             return
 
         self.set_progress_signal.emit(50, 'Training model')
@@ -326,6 +327,8 @@ class ModelTrainer(QWidget, Ui_ModelTrainerUI):
         self.set_progress_signal.emit(100, 'Done')
         self.end_fitting_signal.emit()
         self.is_fitting = False
+        # open a message box to show the user the model was saved
+        QMessageBox.information(self, "Information", f"Model saved successfully as {self.model_name}.model")
 
     @pyqtSlot(int)
     def auto_stop_training_changed(self, checked):
