@@ -54,11 +54,7 @@ def find_best_slice(masks, total_slices):
     return best_slices[middle]
 
 
-
-
-def main(bundle_path, output_path=None, slice=None):
-
-
+def create_segmentation_example(bundle_path, output_path=None, slice=None):
     masks = {}
 
     with np.load(bundle_path) as bundle:
@@ -76,7 +72,7 @@ def main(bundle_path, output_path=None, slice=None):
     mask_labels = []
     current_mask_index = 1
     for mask_name, mask in masks.items():
-        accumulated_mask += mask[:, :, slice] * current_mask_index
+        accumulated_mask += mask[:, :, slice].astype(np.uint8) * current_mask_index
         mask_labels.append(mask_name)
         current_mask_index += 1
 
@@ -88,7 +84,6 @@ def main(bundle_path, output_path=None, slice=None):
 
     colors = get_colormap(len(mask_labels))
 
-    print(colors(1))
 
     ax_left.imshow(img, cmap='gray')
     ax_left.imshow(accumulated_mask, cmap=colors, interpolation='none')
@@ -103,7 +98,6 @@ def main(bundle_path, output_path=None, slice=None):
 
         # Add the text next to the rectangle
         ax_right.text(1.2, i + 0.5, text, va='center')
-        print(text, colors(i + 1))
 
     # Set the limits and turn off the axes
     ax_right.set_xlim(0, 4)
@@ -111,7 +105,7 @@ def main(bundle_path, output_path=None, slice=None):
     ax_right.axis('off')
 
     # save the figure
-    if output_path is not None:
+    if output_path is None:
         output_path = bundle_path + '.png'
     plt.savefig(output_path, dpi=300, bbox_inches='tight')
 
@@ -126,4 +120,4 @@ if __name__ == '__main__':
     args = parser.parse_args()
     bundle_path = args.bundle_path
     slice = args.slice
-    main(bundle_path, slice)
+    create_segmentation_example(bundle_path, slice)
