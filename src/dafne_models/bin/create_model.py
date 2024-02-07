@@ -40,6 +40,8 @@ FORCE_PREPROCESS = False
 PREPROCESS_ONLY = False
 MIN_EPOCHS = 10
 MAX_INPUT_SIZE = 256
+DEFAULT_BIASCORRECTION_LEVELS = 4
+DEFAULT_BIASCORRECTION_NORMALIZE = -1
 
 DATA_PATH = None
 
@@ -207,7 +209,9 @@ def normalize_training_data(data_list, common_resolution, model_size, label_dict
                                                                                 model_size,
                                                                                 training_data_dict,
                                                                                 mask_list,
-                                                                                False)
+                                                                                False,
+                                                                                DEFAULT_BIASCORRECTION_LEVELS,
+                                                                                DEFAULT_BIASCORRECTION_NORMALIZE)
         all_slice_list.extend(processed_image_list)
         all_masks_list.extend(processed_mask_list)
 
@@ -391,6 +395,8 @@ def create_model_source(model_name, common_resolution, model_size, label_dict, l
     source = source.replace('%%N_LEVELS%%', str(int(levels)))
     source = source.replace('%%N_CONV_LAYERS%%', str(int(conv_layers)))
     source = source.replace('%%INITIAL_KERNEL_SIZE%%', str(int(kernel_size)))
+    source = source.replace('%%BIASCORRECTION_LEVELS%%', str(int(DEFAULT_BIASCORRECTION_LEVELS)))
+    source = source.replace('%%BIASCORRECTION_NORMALIZE%%', str(int(DEFAULT_BIASCORRECTION_NORMALIZE)))
 
     return source, uuid
 

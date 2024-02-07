@@ -158,10 +158,12 @@ def model_apply(modelObj: DynamicDLModel, data: dict):
     LABELS_DICT = %%LABELS_DICT%%
     MODEL_RESOLUTION = %%MODEL_RESOLUTION%%
     MODEL_SIZE = %%MODEL_SIZE%%
+    BIASCORRECTION_LEVELS = %%BIASCORRECTION_LEVELS%%
+    BIASCORRECTION_NORMALIZE = %%BIASCORRECTION_NORMALIZE%%
     ## end of configuration
 
     from dafne_dl.common.padorcut import padorcut
-    from dafne_dl.common import biascorrection # redefined biascorrection locally to quickly deploy the model
+    from dafne_dl.common import biascorrection
 
     import numpy as np
     from scipy.ndimage import zoom
@@ -177,7 +179,7 @@ def model_apply(modelObj: DynamicDLModel, data: dict):
     img = zoom(img, zoomFactor) # resample the image to the model resolution
 
     img = padorcut(img, MODEL_SIZE)
-    imgbc = biascorrection.biascorrection_image(img)
+    imgbc = biascorrection.biascorrection_image(img, BIASCORRECTION_LEVELS, BIASCORRECTION_NORMALIZE)
 
     segmentation = netc.predict(np.expand_dims(np.stack([imgbc, np.zeros(MODEL_SIZE)], axis=-1), axis=0))
     label = np.argmax(np.squeeze(segmentation[0, :, :, :OUTPUT_LAYERS]), axis=2)
@@ -200,7 +202,11 @@ def model_incremental_mem(modelObj: DynamicDLModel, trainingData: dict, training
     LABELS_DICT = %%LABELS_DICT%%
     MODEL_RESOLUTION = %%MODEL_RESOLUTION%%
     MODEL_SIZE = %%MODEL_SIZE%%
+    BIASCORRECTION_LEVELS = %%BIASCORRECTION_LEVELS%%
+    BIASCORRECTION_NORMALIZE = %%BIASCORRECTION_NORMALIZE%%
     ## end of configuration
+
+
 
     import dafne_dl.common.preprocess_train as pretrain
     from dafne_dl.common.DataGenerators import DataGeneratorMem
@@ -219,7 +225,7 @@ def model_incremental_mem(modelObj: DynamicDLModel, trainingData: dict, training
     print('Image preprocess')
 
     image_list, mask_list = pretrain.common_input_process_single(inverse_labels, MODEL_RESOLUTION, MODEL_SIZE, MODEL_SIZE, trainingData,
-                                                          trainingOutputs, False)
+                                                          trainingOutputs, False, BIASCORRECTION_LEVELS, BIASCORRECTION_NORMALIZE)
 
     print('Done. Elapsed', time.time()-t)
     nImages = len(image_list)

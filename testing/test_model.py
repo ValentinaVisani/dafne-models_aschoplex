@@ -58,6 +58,8 @@ def main():
         data = f['data'].astype(np.float32)
         resolution = f['resolution'][:2]
 
+    print(resolution)
+
     slice_to_display = data[:, :, args.slice]
     # apply the model
     output = new_generated_model.apply({'image': slice_to_display,
