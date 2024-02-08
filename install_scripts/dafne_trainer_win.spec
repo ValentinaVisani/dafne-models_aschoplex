@@ -14,7 +14,7 @@ a_dafne_trainer = Analysis(['..\\dafne_trainer'],
 				'nibabel',
 				'dafne_dl',
                 'PyQt5',
-                'matplotlib']
+                'matplotlib'],
              hookspath=['..\\..\\dafne\\pyinstaller_hooks'],
              runtime_hooks=[],
              excludes=[],
