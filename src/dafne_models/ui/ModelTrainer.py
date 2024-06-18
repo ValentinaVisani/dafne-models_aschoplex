@@ -328,7 +328,7 @@ class ModelTrainer(QWidget, Ui_ModelTrainerUI):
         self.end_fitting_signal.emit()
         self.is_fitting = False
         # open a message box to show the user the model was saved
-        QMessageBox.information(self, "Information", f"Model saved successfully as {self.model_name}.model")
+        QMessageBox.information(None, "Information", f"Model saved successfully as {self.model_name}.model")
 
     @pyqtSlot(int)
     def auto_stop_training_changed(self, checked):
