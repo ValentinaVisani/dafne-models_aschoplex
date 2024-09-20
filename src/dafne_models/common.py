@@ -45,11 +45,14 @@ def generate_convert(model_id,
         model = model_create_function()
         try:
             model.load_weights(default_weights_path)
+            weights = model.get_weights()
         except AttributeError:
             # model is pytorch, not keras
             import torch
-            model.load_state_dict(torch.load(default_weights_path))
-        weights = model.get_weights()
+            from dafne_dl.misc import torch_apply_fn_to_state_1
+            model.load_state_dict(torch.load(default_weights_path, weights_only=True))
+            weights = torch_apply_fn_to_state_1(model.state_dict(), lambda x: x.clone())
+
         filename = f'models/{model_name_prefix}_{timestamp}.model'
 
     modelObject = model_type(model_id,
