@@ -31,21 +31,38 @@ from dafne_dl.labels.utils import invert_dict
 from tensorflow.keras import optimizers
 from tensorflow.keras.callbacks import Callback
 
-VALIDATION_SPLIT = 0.2
 BATCH_SIZE = 5
 MAX_EPOCHS = 400
 PATIENCE = 5
-ENABLE_GUI = True
-STORE_PREPROCESS = True # used for quick debugs
+ENABLE_GUI = False
+STORE_PREPROCESS = True
+FORCE_PREPROCESS = False
+PREPROCESS_ONLY = False
+MIN_EPOCHS = 10
+MAX_INPUT_SIZE = 256
+DEFAULT_BIASCORRECTION_LEVELS = 4
+DEFAULT_BIASCORRECTION_NORMALIZE = -1
 
 DATA_PATH = None
+
 
 def set_data_path(path):
     global DATA_PATH
     DATA_PATH = path
 
+
 def get_data_path():
     return DATA_PATH
+
+
+def set_force_preprocess(force):
+    global FORCE_PREPROCESS
+    FORCE_PREPROCESS = force
+
+
+def get_force_preprocess():
+    return FORCE_PREPROCESS
+
 
 # Get the path of the script's parent directory
 parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
@@ -90,6 +107,10 @@ def get_model_info(data_list):
     # find the maximum size normalized to the common resolution
     max_size = [np.ceil(data['data'].shape[:2]*data['resolution'][:2] / common_resolution).max() for data in data_list]
     max_size = int(max(max_size))
+    if max_size > MAX_INPUT_SIZE:
+        zoom_factor = MAX_INPUT_SIZE / max_size
+        common_resolution = common_resolution / zoom_factor
+        max_size = MAX_INPUT_SIZE
     model_size = (max_size, max_size)
 
     # Create a set with all the different labels present in the files
@@ -155,7 +176,7 @@ def convert_3d_mask_to_slices(mask_dictionary):
     """
     mask_list = []
     for i in range(mask_dictionary[list(mask_dictionary.keys())[0]].shape[2]):
-        mask_list.append({sanitize_label(label): mask[:, :, i] for label, mask in mask_dictionary.items()})
+        mask_list.append({sanitize_label(label): (mask[:, :, i] > 0).astype(np.uint8) for label, mask in mask_dictionary.items()})
     return mask_list
 
 
@@ -175,9 +196,9 @@ def normalize_training_data(data_list, common_resolution, model_size, label_dict
     all_masks_list = []
 
     for i,data in enumerate(data_list):
-        print('Normalizing', i, '/', len(data_list))
+        print('Normalizing', i+1, '/', len(data_list))
         img_3d = data['data']
-        image_list = [img_3d[:, :, i] for i in range(img_3d.shape[2])]
+        image_list = [img_3d[:, :, i].astype(np.float32) for i in range(img_3d.shape[2])]
         training_data_dict = {'image_list': image_list, 'resolution': data['resolution'][:2]}
         mask_dictionary = {key[5:]: data[key] for key in data.keys() if key.startswith('mask_')}
         mask_list = convert_3d_mask_to_slices(mask_dictionary)
@@ -188,7 +209,9 @@ def normalize_training_data(data_list, common_resolution, model_size, label_dict
                                                                                 model_size,
                                                                                 training_data_dict,
                                                                                 mask_list,
-                                                                                False)
+                                                                                False,
+                                                                                DEFAULT_BIASCORRECTION_LEVELS,
+                                                                                DEFAULT_BIASCORRECTION_NORMALIZE)
         all_slice_list.extend(processed_image_list)
         all_masks_list.extend(processed_mask_list)
 
@@ -208,7 +231,7 @@ def make_validation_list(data_list, common_resolution, model_size, label_dict):
     :param label_dict: dictionary of the labels
     :return:
     """
-    if STORE_PREPROCESS and DATA_PATH and os.path.exists(os.path.join(DATA_PATH,'validation_obj.pickle')):
+    if STORE_PREPROCESS and DATA_PATH and os.path.exists(os.path.join(DATA_PATH,'validation_obj.pickle')) and not FORCE_PREPROCESS:
         with open(os.path.join(DATA_PATH,'validation_obj.pickle'), 'rb') as f:
             training_objects = pickle.load(f)
     else:
@@ -242,7 +265,7 @@ def make_data_generator(data_list, common_resolution, model_size, label_dict):
     :param label_dict: dictionary of the labels
     :return:
     """
-    if STORE_PREPROCESS and DATA_PATH and os.path.exists(os.path.join(DATA_PATH,'training_obj.pickle')):
+    if STORE_PREPROCESS and DATA_PATH and os.path.exists(os.path.join(DATA_PATH,'training_obj.pickle')) and not FORCE_PREPROCESS:
         with open(os.path.join(DATA_PATH,'training_obj.pickle'), 'rb') as f:
             training_objects = pickle.load(f)
     else:
@@ -302,7 +325,7 @@ def train_model(model, training_generator, steps, x_val_list, y_val_list, custom
                 self.n_val_loss_increases = 0
                 self.best_weights = None
             def on_epoch_end(self, epoch, logs=None):
-                if epoch < 20: return
+                if epoch < MIN_EPOCHS: return
                 if logs['val_loss'] < self.min_val_loss:
                     self.min_val_loss = logs['val_loss']
                     self.n_val_loss_increases = 0
@@ -344,17 +367,22 @@ def train_model(model, training_generator, steps, x_val_list, y_val_list, custom
     return model, history
 
 
-def create_model_source(model_name, common_resolution, model_size, label_dict):
+def create_model_source(model_name, common_resolution, model_size, label_dict, levels=5, conv_layers=2, kernel_size=2):
     """
     Create the source code of the model
     :param common_resolution: resolution of the model
     :param model_size: size of the model
     :param label_dict: dictionary of the labels
+    :param levels: number of levels
     :return: the source code
     """
     # load the model template
-    with pkg_resources.files(resources).joinpath('generate_model.py.tmpl').open() as f:
-        source = f.read()
+    if getattr(sys, '_MEIPASS', None): # PyInstaller support. If _MEIPASS is set, we are in a Pyinstaller environment
+        with open(os.path.join(sys._MEIPASS, 'resources', 'generate_model.py.tmpl'), 'r') as f:
+            source = f.read()
+    else:
+        with pkg_resources.files(resources).joinpath('generate_model.py.tmpl').open() as f:
+            source = f.read()
 
     model_uuid = str(uuid.uuid4())
 
@@ -364,19 +392,30 @@ def create_model_source(model_name, common_resolution, model_size, label_dict):
     source = source.replace('%%MODEL_SIZE%%', f'[{model_size[0]:d}, {model_size[1]:d}]')
     source = source.replace('%%MODEL_UID%%', f'"{model_uuid}"')
     source = source.replace('%%LABELS_DICT%%', str(label_dict))
+    source = source.replace('%%N_LEVELS%%', str(int(levels)))
+    source = source.replace('%%N_CONV_LAYERS%%', str(int(conv_layers)))
+    source = source.replace('%%INITIAL_KERNEL_SIZE%%', str(int(kernel_size)))
+    source = source.replace('%%BIASCORRECTION_LEVELS%%', str(int(DEFAULT_BIASCORRECTION_LEVELS)))
+    source = source.replace('%%BIASCORRECTION_NORMALIZE%%', str(int(DEFAULT_BIASCORRECTION_NORMALIZE)))
 
     return source, uuid
 
 
-def create_model(model_name, data_path):
+def create_model(model_name, data_path, levels=5, conv_layers=2, kernel_size=2, test_create_model=False):
     global DATA_PATH
 
-    data_list = load_data(data_path)
-    DATA_PATH = data_path
+    if test_create_model:
+        print("Testing model creation")
+        common_resolution = [0.5, 0.5]
+        model_size = [321, 321]
+        label_dict = {1: 'LK', 2:'RK'}
+    else:
+        data_list = load_data(data_path)
+        DATA_PATH = data_path
 
-    common_resolution, model_size, label_dict = get_model_info(data_list)
+        common_resolution, model_size, label_dict = get_model_info(data_list)
 
-    source, model_id = create_model_source(model_name, common_resolution, model_size, label_dict)
+    source, model_id = create_model_source(model_name, common_resolution, model_size, label_dict, levels, conv_layers, kernel_size)
 
     # write the new model generator script
     with open(f'generate_{model_name}_model.py', 'w') as f:
@@ -385,8 +424,15 @@ def create_model(model_name, data_path):
     create_model_function, apply_model_function, incremental_learn_function = get_model_functions(source)
     model = create_model_function()
 
+    if test_create_model:
+        return None, None
+
     n_datasets = len(data_list)
-    n_validation = int(n_datasets * VALIDATION_SPLIT)
+    if n_datasets < 10:
+        validation_split = 0.2
+    else:
+        validation_split = 0.1
+    n_validation = int(n_datasets * validation_split)
 
     if n_validation == 0:
         print("WARNING: No validation data will be used")
@@ -396,6 +442,9 @@ def create_model(model_name, data_path):
 
     training_generator, steps, x_val_list, y_val_list = prepare_data(training_data_list, validation_data_list,
                                                                      common_resolution, model_size, label_dict)
+
+    if PREPROCESS_ONLY:
+        return None, None
 
     trained_model, history = train_model(model, training_generator, steps, x_val_list, y_val_list)
 
@@ -424,21 +473,36 @@ def save_weights(model, model_name):
 
 
 def main():
-    global ENABLE_GUI, VALIDATION_SPLIT
+    global ENABLE_GUI, FORCE_PREPROCESS, PREPROCESS_ONLY, MIN_EPOCHS
 
     parser = argparse.ArgumentParser()
     parser.add_argument("model_name", help="Name of the model to create")
     parser.add_argument("data_path", help="Path to data folder (containing the '*.npz' files)")
     parser.add_argument("--no-gui", "-n", help="Disable the GUI", action="store_true")
-    parser.add_argument("--validation-split", "-s", help="Percentage of data to use for validation", type=float, default=0.2)
+    parser.add_argument("--levels", "-l", help="Number of levels of the model", type=int, default=5)
+    parser.add_argument("--conv-layers", "-c", help="Number of convolutional layers", type=int, default=2)
+    parser.add_argument("--kernel-size", "-k", help="Initial size of the kernel", type=int, default=2)
+    parser.add_argument("--preprocess-only", "-p", help="Only preprocess the data", action="store_true")
+    parser.add_argument("--force-preprocess", "-f", help="Force preprocessing of the data", action="store_true")
+    parser.add_argument("--min-epochs", "-m", help="Minimum number of epochs", type=int, default=10)
+    parser.add_argument("--test-model", "-t", help="Test the model creation", action="store_true")
     args = parser.parse_args()
 
     if args.no_gui:
         ENABLE_GUI = False
 
-    VALIDATION_SPLIT = args.validation_split
+    if args.force_preprocess:
+        FORCE_PREPROCESS = True
 
-    dl_model, history = create_model(args.model_name, args.data_path)
+    if args.preprocess_only:
+        PREPROCESS_ONLY = True
+
+    MIN_EPOCHS = args.min_epochs
+
+    dl_model, history = create_model(args.model_name, args.data_path, args.levels, args.conv_layers, args.kernel_size, args.test_model)
+
+    if PREPROCESS_ONLY or args.test_model:
+        return
 
     save_weights(dl_model.model, args.model_name)
 

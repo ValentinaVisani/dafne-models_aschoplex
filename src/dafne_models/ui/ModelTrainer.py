@@ -10,19 +10,20 @@ import matplotlib.pyplot as plt
 import numpy as np
 from PyQt5.QtWidgets import QMessageBox, QFileDialog, QWidget
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.colors import ListedColormap
+from matplotlib.ticker import FuncFormatter
 from tensorflow.keras.callbacks import Callback
 
 from .ModelTrainer_Ui import Ui_ModelTrainerUI
 from ..bin.create_model import load_data, get_model_info, create_model_source, get_model_functions, train_model, \
-    prepare_data, set_data_path
+    prepare_data, set_data_path, set_force_preprocess
 from ..utils.ThreadHelpers import separate_thread_decorator
 
 PATIENCE = 10
-VALIDATION_SPLIT = 0.2
-
+MIN_EPOCHS = 20
 
 class PredictionUICallback(Callback, QObject):
-    fit_signal = pyqtSignal(float, float, np.ndarray)
+    fit_signal = pyqtSignal(float, float, np.ndarray, np.ndarray)
 
     def __init__(self, test_image=None):
         Callback.__init__(self)
@@ -60,7 +61,7 @@ class PredictionUICallback(Callback, QObject):
         loss = logs['loss']
 
         if self.auto_stop_training:
-            if epoch >= 20 and val_loss < self.min_val_loss:
+            if epoch >= MIN_EPOCHS and val_loss < self.min_val_loss:
                 self.min_val_loss = val_loss
                 self.n_val_loss_increases = 0
                 self.best_weights = self.model.get_weights()
@@ -71,6 +72,7 @@ class PredictionUICallback(Callback, QObject):
                 self.model.stop_training = True
         else:
             self.best_weights = None
+            self.min_val_loss = np.inf
 
         if self.test_image is None:
             self.fit_signal.emit(loss, val_loss, np.zeros((10,10)))
@@ -78,7 +80,7 @@ class PredictionUICallback(Callback, QObject):
 
         segmentation = self.model.predict(np.expand_dims(self.test_image, 0))
         label = np.argmax(np.squeeze(segmentation[0, :, :, :-1]), axis=2)
-        self.fit_signal.emit(loss, val_loss, label)
+        self.fit_signal.emit(loss, val_loss, self.test_image[:, :, 0], label)
 
 
 class ModelTrainer(QWidget, Ui_ModelTrainerUI):
@@ -92,7 +94,7 @@ class ModelTrainer(QWidget, Ui_ModelTrainerUI):
         self.setupUi(self)
 
         self.setWindowTitle('Dafne Model Trainer')
-
+        self.advanced_widget.hide()
         self.fit_output_box.hide()
         self.adjustSize()
         self.pyplot_layout = QtWidgets.QVBoxLayout(self.fit_output_box)
@@ -103,6 +105,7 @@ class ModelTrainer(QWidget, Ui_ModelTrainerUI):
         self.fig.set_tight_layout(True)
         self.canvas = FigureCanvas(self.fig)
         self.ax_left = self.fig.add_subplot(121)
+        self.ax_left_twin = self.ax_left.twinx()
         self.ax_right = self.fig.add_subplot(122)
         self.ax_right.set_title('Current output')
         self.ax_right.axis('off')
@@ -127,29 +130,58 @@ class ModelTrainer(QWidget, Ui_ModelTrainerUI):
 
         self.pyplot_layout.addWidget(self.bottom_widget)
 
+        self.advanced_button.clicked.connect(self.show_advanced)
         self.choose_Button.clicked.connect(self.choose_data)
         self.save_choose_Button.clicked.connect(self.choose_save_location)
         self.set_progress_signal.connect(self.set_progress)
         self.start_fitting_signal.connect(self.start_fitting_slot)
         self.end_fitting_signal.connect(self.stop_fitting_slot)
         self.fit_Button.clicked.connect(self.fit_clicked)
+        self.preprocess_Button.clicked.connect(self.preprocess_clicked)
+        self.force_preprocess_check.stateChanged.connect(self.decide_enable_fit)
         self.is_fitting = False
         self.fitting_ui_callback = None
         self.loss_list = []
         self.val_loss_list = []
         self.current_val_slice = 0
         self.val_image_list = []
+        self.preprocessed_data_exist = False
+
+    @pyqtSlot()
+    def show_advanced(self):
+        self.advanced_widget.show()
+        self.advanced_button.hide()
+        self.adjustSize()
 
     def closeEvent(self, event: QtGui.QCloseEvent) -> None:
         if self.is_fitting:
             event.ignore()
 
     def decide_enable_fit(self):
+        if self.preprocessed_data_exist and not self.force_preprocess_check.isChecked():
+            self.fit_Button.setText('Fit')
+        else:
+            self.fit_Button.setText('Preprocess + fit')
         if self.location_Text.text() and self.model_location_Text.text():
             self.fit_Button.setEnabled(True)
+            if not self.preprocessed_data_exist or self.force_preprocess_check.isChecked():
+                self.preprocess_Button.setEnabled(True)
+            else:
+                self.preprocess_Button.setEnabled(False)
         else:
             self.fit_Button.setEnabled(False)
+            self.preprocess_Button.setEnabled(False)
             self.set_progress(0, '')
+
+    def decide_preprocess(self):
+        if os.path.exists(os.path.join(self.data_dir, 'training_obj.pickle')):
+            self.preprocessed_data_exist = True
+            self.force_preprocess_check.setEnabled(True)
+            self.force_preprocess_check.setChecked(False)
+        else:
+            self.preprocessed_data_exist = False
+            self.force_preprocess_check.setEnabled(False)
+            self.force_preprocess_check.setChecked(True)
 
     @pyqtSlot()
     def choose_data(self):
@@ -171,6 +203,7 @@ class ModelTrainer(QWidget, Ui_ModelTrainerUI):
         if len(npz_files) > 0:
             self.save_choose_Button.setEnabled(True)
             self.location_Text.setText(self.data_dir)
+            self.decide_preprocess()
             self.decide_enable_fit()
         else:
             invalid()
@@ -197,8 +230,9 @@ class ModelTrainer(QWidget, Ui_ModelTrainerUI):
             invalid()
 
     @pyqtSlot()
+    @pyqtSlot(bool)
     @separate_thread_decorator
-    def fit(self):
+    def fit(self, preprocess_only=False):
         self.is_fitting = True
         self.start_fitting_signal.emit()
         self.set_progress_signal.emit(0, 'Loading data')
@@ -208,8 +242,14 @@ class ModelTrainer(QWidget, Ui_ModelTrainerUI):
         self.set_progress_signal.emit(10, 'Getting model info')
         common_resolution, model_size, label_dict = get_model_info(data_list)
 
+        levels = self.levels_spin.value()
+        conv_layers = self.convlayers_spin.value()
+        kernel_size = self.kernsize_spin.value()
+
+        set_force_preprocess(self.force_preprocess_check.isChecked())
+
         self.set_progress_signal.emit(20, 'Creating model')
-        source, model_uuid = create_model_source(self.model_name, common_resolution, model_size, label_dict)
+        source, model_uuid = create_model_source(self.model_name, common_resolution, model_size, label_dict, levels, conv_layers, kernel_size)
 
         # write the new model generator script
         with open(os.path.join(self.model_dir, f'generate_{self.model_name}_model.py'), 'w') as f:
@@ -219,7 +259,12 @@ class ModelTrainer(QWidget, Ui_ModelTrainerUI):
         model = create_model_function()
 
         n_datasets = len(data_list)
-        n_validation = int(n_datasets * VALIDATION_SPLIT)
+        if n_datasets < 10:
+            validation_split = 0.2
+        else:
+            validation_split = 0.1
+
+        n_validation = int(n_datasets * validation_split)
 
         if n_validation == 0:
             print("WARNING: No validation data will be used")
@@ -233,6 +278,15 @@ class ModelTrainer(QWidget, Ui_ModelTrainerUI):
 
         training_generator, steps, x_val_list, y_val_list = prepare_data(training_data_list, validation_data_list,
                                                                          common_resolution, model_size, label_dict)
+
+        print(f'{x_val_list[0].shape=}')
+
+        if preprocess_only:
+            self.set_progress_signal.emit(100, 'Done')
+            self.end_fitting_signal.emit()
+            self.is_fitting = False
+            QMessageBox.information(self, "Information", "Preprocess done")
+            return
 
         self.set_progress_signal.emit(50, 'Training model')
 
@@ -273,6 +327,8 @@ class ModelTrainer(QWidget, Ui_ModelTrainerUI):
         self.set_progress_signal.emit(100, 'Done')
         self.end_fitting_signal.emit()
         self.is_fitting = False
+        # open a message box to show the user the model was saved
+        QMessageBox.information(None, "Information", f"Model saved successfully as {self.model_name}.model")
 
     @pyqtSlot(int)
     def auto_stop_training_changed(self, checked):
@@ -288,17 +344,40 @@ class ModelTrainer(QWidget, Ui_ModelTrainerUI):
         except IndexError:
             print("Validation slice out of range")
 
-    @pyqtSlot(float, float, np.ndarray)
-    def update_plot(self, loss, val_loss, label):
+    @pyqtSlot(float, float, np.ndarray, np.ndarray)
+    def update_plot(self, loss, val_loss, image, label):
+        # Define the number of segments (including the transparent color for zero)
+        num_segments = 21
+
+        # Create a list of colors with varying alpha values
+        colors = [(0, 0, 0, 0)]  # Transparent color for zero
+        for i in range(1, num_segments):
+            # Generate distinguishable colors using HSV color space
+            color = plt.cm.get_cmap('hsv', num_segments)(i)
+            color = (color[0], color[1], color[2], 0.5)
+            colors.append(color)
+
+        # Create the colormap
+        labels_colormap = ListedColormap(colors)
+
         self.loss_list.append(loss)
         self.val_loss_list.append(val_loss)
+
+        y_axis_formatter = FuncFormatter(lambda y, _: '{:.1g}'.format(y))
+
         self.ax_left.clear()
-        self.ax_left.plot(self.loss_list)
-        self.ax_left.plot(self.val_loss_list)
-        self.ax_left.legend(['train', 'validation'], loc='upper right')
+        self.ax_left.plot(self.loss_list, color='#E66100', label='train')
+        self.ax_left.set_ylabel('Training loss', color='#E66100')
+        self.ax_left.yaxis.set_major_formatter(y_axis_formatter)
+        self.ax_left_twin.clear()
+        self.ax_left_twin.plot(self.val_loss_list, color='#5D3A9B', label='validation')
+        self.ax_left_twin.set_ylabel('Validation loss', color='#5D3A9B')
+        self.ax_left_twin.yaxis.set_label_position('right')
+        self.ax_left_twin.yaxis.set_major_formatter(y_axis_formatter)
         self.ax_right.clear()
         self.ax_right.set_title('Current output')
-        self.ax_right.imshow(label)
+        self.ax_right.imshow(image, cmap='gray')
+        self.ax_right.imshow(label, cmap=labels_colormap)
         self.ax_right.axis('off')
         self.canvas.draw()
 
@@ -312,10 +391,13 @@ class ModelTrainer(QWidget, Ui_ModelTrainerUI):
         self.loss_list = []
         self.val_loss_list = []
         self.fit_Button.setText('Stop fitting')
+        self.preprocess_Button.setEnabled(False)
         self.fit_output_box.show()
         self.adjustSize()
         self.choose_Button.setEnabled(False)
         self.save_choose_Button.setEnabled(False)
+        self.advanced_widget.setEnabled(False)
+        self.advanced_button.setEnabled(False)
         if self.val_image_list:
             self.slice_select_slider.setEnabled(True)
 
@@ -323,6 +405,14 @@ class ModelTrainer(QWidget, Ui_ModelTrainerUI):
     def stop_fitting_slot(self):
         self.fit_Button.setText('Fit model')
         self.slice_select_slider.setEnabled(False)
+        self.advanced_widget.setEnabled(True)
+        self.advanced_button.setEnabled(True)
+        self.decide_preprocess()
+        self.decide_enable_fit()
+
+    @pyqtSlot()
+    def preprocess_clicked(self):
+        self.fit(True)
 
     @pyqtSlot()
     def fit_clicked(self):

@@ -257,6 +257,10 @@ def coscia_apply(modelObj: DynamicDLModel, data: dict):
         corrector.SetMaximumNumberOfIterations(numberOfIteration * numberFittingLevels)
         output = corrector.Execute(image, maskImage)
         img2 = sitk.GetArrayFromImage(output)
+        m = np.max(img2)
+        print('Biascorrection in model. Image Max:', m)
+        if m < 350:
+            img2 = img2 * MAX_GRAY_VALUE / img2.max()
         return img2
 
 
@@ -392,11 +396,23 @@ def thigh_incremental_mem(modelObj: DynamicDLModel, trainingData: dict, training
         swap = True
 
     if single_side:
-        image_list, mask_list = pretrain.common_input_process_single(inverse_labels, MODEL_RESOLUTION, MODEL_SIZE, MODEL_SIZE_SPLIT, trainingData,
-                                                          trainingOutputs, swap)
+        try:
+            image_list, mask_list = pretrain.common_input_process_single(inverse_labels, MODEL_RESOLUTION, MODEL_SIZE, MODEL_SIZE_SPLIT, trainingData,
+                                                          trainingOutputs, swap, 8, -1)
+        except TypeError:
+            # we are using a version of the framework that does not accept extra parameters for bias correction
+            image_list, mask_list = pretrain.common_input_process_single(inverse_labels, MODEL_RESOLUTION, MODEL_SIZE,
+                                                                         MODEL_SIZE_SPLIT, trainingData,
+                                                                         trainingOutputs, swap)
     else:
-        image_list, mask_list = pretrain.common_input_process_split(inverse_labels, MODEL_RESOLUTION, MODEL_SIZE, MODEL_SIZE_SPLIT, trainingData,
-                                                          trainingOutputs)
+        try:
+            image_list, mask_list = pretrain.common_input_process_split(inverse_labels, MODEL_RESOLUTION, MODEL_SIZE, MODEL_SIZE_SPLIT, trainingData,
+                                                          trainingOutputs, 8, -1)
+        except TypeError:
+            # we are using a version of the framework that does not accept extra parameters for bias correction
+            image_list, mask_list = pretrain.common_input_process_split(inverse_labels, MODEL_RESOLUTION, MODEL_SIZE,
+                                                                         MODEL_SIZE_SPLIT, trainingData,
+                                                                         trainingOutputs)
 
     print('Done. Elapsed', time.time()-t)
     nImages = len(image_list)
