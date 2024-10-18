@@ -12,7 +12,8 @@ def generate_convert(model_id,
                      model_apply_function,
                      model_learn_function,
                      dimensionality=2,
-                     model_type=DynamicDLModel):
+                     model_type=DynamicDLModel,
+                     metadata=None):
     """
     Function that either generates a new model using the default weights, or updates an existing model, based on argv[1]
 
@@ -25,6 +26,7 @@ def generate_convert(model_id,
         model_learn_function: the function that performs the incremental learning of the model
         dimensionality: the dimensionality of the data (2 or 3)
         model_type: the type of the model (e.g. DynamicDLModel or DynamicTorchModel)
+        metadata: additional metadata to be stored in the model
 
     Returns:
         None
@@ -61,7 +63,8 @@ def generate_convert(model_id,
                                  incremental_learn_function=model_learn_function,
                                  weights=weights,
                                  timestamp_id=timestamp,
-                                 data_dimensionality=dimensionality
+                                 data_dimensionality=dimensionality,
+                                 metadata=metadata
                                  )
 
     with open(filename, 'wb') as f:
