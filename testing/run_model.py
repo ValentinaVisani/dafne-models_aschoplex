@@ -82,6 +82,7 @@ def main():
         model = generic_load_model(f)
 
     metadata = model.get_metadata()
+    print(metadata)
 
     # check and install model dependencies
     dependencies = metadata.get('dependencies', {})
@@ -90,7 +91,7 @@ def main():
         config_file=None,
         config_string=None,
         unique_id=APP_STRING,
-        interactive_initialization=True,
+        interactive_initialization=False,
         use_gui=False,
         install_local=False,
         package_manager=flexidep.PackageManagers.pip,
@@ -98,7 +99,8 @@ def main():
     )
 
     for package, alternative_str in dependencies.items():
-        dependency_manager.process_package(package, alternative_str)
+        print("Processing package", package)
+        dependency_manager.process_single_package(package, alternative_str)
 
     # check if the model has a specific orientation
     model_orientation = metadata.get('orientation', None)
