@@ -11,6 +11,7 @@ from dafne_dl.model_loaders import generic_load_model
 import flexidep
 import ast
 import pprint
+import dill
 
 APP_STRING = 'network.dafne_models.run_model'
 
@@ -79,10 +80,13 @@ def main():
     except TypeError:
         model_classification = ''
 
-    with open(args.model, 'rb') as f:
-        model = generic_load_model(f)
+    print("Loading model")
 
-    metadata = model.get_metadata()
+    with open(args.model, 'rb') as f:
+        input_dict = dill.load(f)
+
+    metadata = input_dict.get('metadata', {})
+    print("Model metadata:")
     pprint.pp(metadata)
 
     # check and install model dependencies
@@ -102,6 +106,9 @@ def main():
     for package, alternative_str in dependencies.items():
         print("Processing package", package)
         dependency_manager.process_single_package(package, alternative_str)
+
+    # build the model object. Now that the dependencies are installed, the model can be loaded
+    model = generic_load_model(input_dict)
 
     # check if the model has a specific orientation
     model_orientation = metadata.get('orientation', None)

@@ -9,13 +9,14 @@ REQUIREMENTS = {
     '*': [
         'matplotlib',
         'ormir-pyvoxel',
-        'dafne-dicomUtils'
+        'dafne-dicomUtils',
+        'dill'
     ],
     'main': [
         'dafne_dl >= 1.4a2'
     ],
     'torch_models': [
-        'dafne_dl-torch_models'
+        'dafne_dl-torch_models >= 2.0a2'
     ]
 }
 
