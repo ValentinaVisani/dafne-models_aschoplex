@@ -10,6 +10,7 @@ from dicomUtils import medical_volume_from_path, realign_medical_volume
 from dafne_dl.model_loaders import generic_load_model
 import flexidep
 import ast
+import pprint
 
 APP_STRING = 'network.dafne_models.run_model'
 
@@ -82,7 +83,7 @@ def main():
         model = generic_load_model(f)
 
     metadata = model.get_metadata()
-    print(metadata)
+    pprint.pp(metadata)
 
     # check and install model dependencies
     dependencies = metadata.get('dependencies', {})

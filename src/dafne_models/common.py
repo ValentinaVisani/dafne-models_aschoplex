@@ -52,7 +52,7 @@ def generate_convert(model_id,
             # model is pytorch, not keras
             import torch
             from dafne_dl.misc import torch_apply_fn_to_state_1
-            model.load_state_dict(torch.load(default_weights_path, weights_only=True))
+            model.load_state_dict(torch.load(default_weights_path, weights_only=True, map_location=torch.device('cpu')))
             weights = torch_apply_fn_to_state_1(model.state_dict(), lambda x: x.clone())
 
         filename = f'models/{model_name_prefix}_{timestamp}.model'
