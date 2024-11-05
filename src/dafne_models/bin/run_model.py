@@ -126,7 +126,7 @@ def main():
             print("Unknown orientation")
             model_orientation = None
 
-    image, *_ = medical_volume_from_path(args.image_path, reorient_data=False)
+    image = medical_volume_from_path(args.image_path, reorient_data=False)
 
     original_orientation = image.orientation
 
@@ -139,7 +139,7 @@ def main():
     print("Image loaded")
 
     for contrast in args.other_contrasts:
-        contrast_image, *_ = medical_volume_from_path(contrast, reorient_data=False)
+        contrast_image = medical_volume_from_path(contrast, reorient_data=False)
         contrast_image = realign_medical_volume(contrast_image, image)
         inputs.append(contrast_image.volume.astype(np.float32))
 

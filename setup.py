@@ -9,7 +9,7 @@ REQUIREMENTS = {
     '*': [
         'matplotlib',
         'ormir-pyvoxel',
-        'dafne-dicomUtils',
+        'dafne-dicomUtils >= 0.1.7',
         'dill'
     ],
     'main': [
