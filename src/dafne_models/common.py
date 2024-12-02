@@ -25,7 +25,7 @@ def generate_convert(model_id,
         model_apply_function: the function that applies the model
         model_learn_function: the function that performs the incremental learning of the model
         dimensionality: the dimensionality of the data (2 or 3)
-        model_type: the type of the model (e.g. DynamicDLModel or DynamicTorchModel)
+        model_type: the type of the model (e.g. DynamicDLModel or DynamicTorchModel or DynamicEnsembleModel)
         metadata: additional metadata to be stored in the model
 
     Returns:
@@ -50,12 +50,26 @@ def generate_convert(model_id,
             weights = model.get_weights()
         except AttributeError:
             # model is pytorch, not keras
-            import torch
-            from dafne_dl.misc import torch_apply_fn_to_state_1
-            model.load_state_dict(torch.load(default_weights_path, weights_only=True, map_location=torch.device('cpu')))
-            weights = torch_apply_fn_to_state_1(model.state_dict(), lambda x: x.clone())
+            try:
+                import torch
+                from dafne_dl.misc import torch_apply_fn_to_state_1
+                model.load_state_dict(torch.load(default_weights_path, weights_only=True, map_location=torch.device('cpu')))
+                weights = torch_apply_fn_to_state_1(model.state_dict(), lambda x: x.clone())
+            except AttributeError:
+                # model is Ensemble pytorch
+                import torch
+                from dafne_dl.misc import torch_apply_fn_to_state_1
+                weights=[]
+                for ii in range(len(model)):
+                    model[ii].load_state_dict(torch.load(os.path.join(model_id,'fold_{f}'.format(f=ii), default_weights_path), weights_only=True, map_location=torch.device('cpu')))
+                    weight = torch_apply_fn_to_state_1(model[ii].state_dict(), lambda x: x.clone())
+                    weights.append(weight)
 
-        filename = f'models/{model_name_prefix}_{timestamp}.model'
+            # filename = f'models/{model_name_prefix}_{timestamp}.model'
+
+        # filename = f'models/{model_name_prefix}_{timestamp}.model'
+
+            filename = f'/home/valentina/Desktop/Projects/ASCHOPLEX_DAFNE/ensemble4dafne/{model_name_prefix}_{timestamp}.model' # questo va modificato
 
     modelObject = model_type(model_id,
                                  model_create_function,
