@@ -61,15 +61,11 @@ def generate_convert(model_id,
                 from dafne_dl.misc import torch_apply_fn_to_state_1
                 weights=[]
                 for ii in range(len(model)):
-                    model[ii].load_state_dict(torch.load(os.path.join(model_id,'fold_{f}'.format(f=ii), default_weights_path), weights_only=True, map_location=torch.device('cpu')))
+                    model[ii].load_state_dict(torch.load(os.path.join(default_weights_path,f'fold_{ii}', 'best_metric_model.pt'), weights_only=True, map_location=torch.device('cpu')))
                     weight = torch_apply_fn_to_state_1(model[ii].state_dict(), lambda x: x.clone())
                     weights.append(weight)
 
-            # filename = f'models/{model_name_prefix}_{timestamp}.model'
-
-        # filename = f'models/{model_name_prefix}_{timestamp}.model'
-
-            filename = f'/home/valentina/Desktop/Projects/ASCHOPLEX_DAFNE/ensemble4dafne/{model_name_prefix}_{timestamp}.model' # questo va modificato
+            filename = f'models/{model_name_prefix}_{timestamp}.model'
 
     modelObject = model_type(model_id,
                                  model_create_function,
