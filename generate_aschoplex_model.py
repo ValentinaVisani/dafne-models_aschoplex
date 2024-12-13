@@ -25,122 +25,72 @@ if 'generate_convert' not in locals() and 'generate_convert' not in globals():
 
 from dafne_dl.DynamicEnsembleModel import DynamicEnsembleModel
 
-# def init_folds():
-#     from monai.networks.nets import SwinUNETR, UNETR, DynUNet
-
-#     model_fold0 = SwinUNETR(
-#         feature_size= 48,
-#         img_size=(128,128,128),
-#         in_channels=1,
-#         out_channels=2,
-#         spatial_dims= 3,
-#         use_checkpoint= False,
-#         use_v2= False,
-#     )
-
-#     model_fold1 = UNETR(
-#         feature_size= 16,
-#         img_size=(128,128,128),
-#         in_channels=1,
-#         out_channels=2,
-#         # spatial_dims: 3
-#         hidden_size= 768,
-#         mlp_dim= 3072,
-#         num_heads= 12,
-#         proj_type= "conv",
-#         norm_name= "instance",
-#         res_block= True,
-#         dropout_rate= 0.0,
-#         # use_checkpoint: True
-#     )
-
-#     model_fold2 = DynUNet(
-#         spatial_dims=3,
-#         in_channels=1,
-#         out_channels=2,
-#         kernel_size= [3, [1, 1, 3], 3, 3],
-#         strides= [1, 2, 2, 1],
-#         upsample_kernel_size= [2, 2, 1],
-#         norm_name=("INSTANCE", {"affine": True}),
-#         deep_supervision= False,
-#         deep_supr_num= 1,
-#         res_block= False,
-#     )
-
-#     model_fold3 = DynUNet(
-#         spatial_dims=3,
-#         in_channels=1,
-#         out_channels=2,
-#         kernel_size= [3, [1, 1, 3], 3, 3],
-#         strides= [1, 2, 2, 1],
-#         upsample_kernel_size= [2, 2, 1],
-#         norm_name=("INSTANCE", {"affine": True}),
-#         deep_supervision= False,
-#         deep_supr_num= 1,
-#         res_block= False,
-#     )
-    
-#     model_fold4 = DynUNet(
-#         spatial_dims=3,
-#         in_channels=1,
-#         out_channels=2,
-#         kernel_size= [3, [1, 1, 3], 3, 3],
-#         strides= [1, 2, 2, 1],
-#         upsample_kernel_size= [2, 2, 1],
-#         norm_name=("INSTANCE", {"affine": True}),
-#         deep_supervision= False,
-#         deep_supr_num= 1,
-#         res_block= False,
-#     )
-
-#     return model_fold0, model_fold1, model_fold2, model_fold3, model_fold4
-
 def init_folds():
-    from monai.networks.nets import UNet
+    from monai.networks.nets import SwinUNETR, UNETR, DynUNet
+
+    model_fold0 = SwinUNETR(
+        feature_size= 48,
+        img_size=(128,128,128),
+        in_channels=1,
+        out_channels=2,
+        spatial_dims= 3,
+        use_checkpoint= False,
+        use_v2= False,
+    )
+
+    model_fold1 = UNETR(
+        feature_size= 16,
+        img_size=(128,128,128),
+        in_channels=1,
+        out_channels=2,
+        # spatial_dims: 3
+        hidden_size= 768,
+        mlp_dim= 3072,
+        num_heads= 12,
+        proj_type= "conv",
+        norm_name= "instance",
+        res_block= True,
+        dropout_rate= 0.0,
+        # use_checkpoint: True
+    )
+
+    model_fold2 = DynUNet(
+        spatial_dims=3,
+        in_channels=1,
+        out_channels=2,
+        kernel_size= [3, [1, 1, 3], 3, 3],
+        strides= [1, 2, 2, 1],
+        upsample_kernel_size= [2, 2, 1],
+        norm_name=("INSTANCE", {"affine": True}),
+        deep_supervision= False,
+        deep_supr_num= 1,
+        res_block= False,
+    )
+
+    model_fold3 = DynUNet(
+        spatial_dims=3,
+        in_channels=1,
+        out_channels=2,
+        kernel_size= [3, [1, 1, 3], 3, 3],
+        strides= [1, 2, 2, 1],
+        upsample_kernel_size= [2, 2, 1],
+        norm_name=("INSTANCE", {"affine": True}),
+        deep_supervision= False,
+        deep_supr_num= 1,
+        res_block= False,
+    )
     
-    model_fold0=UNet(
-        spatial_dims= 3,
-        in_channels= 1,
-        out_channels= 2,
-        channels= [16, 32, 64, 128, 256],
-        strides= [2, 2, 2, 2],
-        num_res_units= 2,
-    )
-
-    model_fold1=UNet(
-        spatial_dims= 3,
-        in_channels= 1,
-        out_channels= 2,
-        channels= [16, 32, 64, 128, 256],
-        strides= [2, 2, 2, 2],
-        num_res_units= 2,
-    )
-
-    model_fold2=UNet(
-        spatial_dims= 3,
-        in_channels= 1,
-        out_channels= 2,
-        channels= [16, 32, 64, 128, 256],
-        strides= [2, 2, 2, 2],
-        num_res_units= 2,
-    )
-
-    model_fold3=UNet(
-        spatial_dims= 3,
-        in_channels= 1,
-        out_channels= 2,
-        channels= [16, 32, 64, 128, 256],
-        strides= [2, 2, 2, 2],
-        num_res_units= 2,
-    )
-    
-    model_fold4=UNet(
-        spatial_dims= 3,
-        in_channels= 1,
-        out_channels= 2,
-        channels= [16, 32, 64, 128, 256],
-        strides= [2, 2, 2, 2],
-        num_res_units= 2,
+    model_fold4 = DynUNet(
+        spatial_dims=3,
+        in_channels=1,
+        out_channels=2,
+        kernel_size= [3, [1, 1, 3], 3, 3],
+        strides= [1, 2, 2, 1],
+        upsample_kernel_size= [2, 2, 1],
+        norm_name=("INSTANCE", {"affine": True}),
+        deep_supervision= False,
+        deep_supr_num= 1,
+        res_block= False,
     )
 
     return model_fold0, model_fold1, model_fold2, model_fold3, model_fold4
