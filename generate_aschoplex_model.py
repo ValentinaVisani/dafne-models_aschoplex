@@ -134,10 +134,6 @@ def ensemble_apply(modelObj, data: dict):
 
     image = np.expand_dims(image, axis=0)
 
-    # Before transforms
-    print("Raw image max:", image.max())
-    print("Raw image min:", image.min())
-
     torch_data = {
         "image": image.astype(np.float32),
         "image_meta_dict": {
@@ -179,14 +175,8 @@ def ensemble_apply(modelObj, data: dict):
     )
 
     input_data = transforms(torch_data)
-    # After transforms
-    print("Transformed input data shape:", input_data['image'].shape)
-    print("Transformed input max:", input_data['image'].max())
-    print("Transformed input min:", input_data['image'].min())
 
     input_tensor = torch.tensor(input_data['image']).to(device).unsqueeze(0) #torch.tensor(input_data['image']).to(device).unsqueeze(0)
-
-    print("Input tensor shape:", input_tensor.shape) 
 
     models=[]
 
@@ -209,11 +199,6 @@ def ensemble_apply(modelObj, data: dict):
                 input_tensor, roi_size, sw_batch_size, model_load, mode="gaussian", overlap=0.8
             )
             print("Model applied")
-            # Model output
-            print("Model output shape:", val_output.shape)
-            print("Model output max:", val_output.max())
-            print("Model output min:", val_output.min())
-            print("image meta dict:", input_data['image_meta_dict'])
 
             # Pass both the prediction (val_output) and metadata (image_meta_dict) to post_pred
             post_pred_input = {
@@ -226,20 +211,14 @@ def ensemble_apply(modelObj, data: dict):
             }
             val_outputs_post = post_pred(post_pred_input)
             # Postprocessing
-            print("Postprocessed output max:", val_outputs_post["pred"].max())
-            print("Postprocessed output min:", val_outputs_post["pred"].min())
             val_outputs_convert = val_outputs_post['pred_final'].cpu().numpy() 
             seg = np.squeeze(val_outputs_convert[0, 1, ...])  
-            print("seg max value:", np.max(seg))
-            print("seg min value:", np.min(seg))
-
             seg_all.append(seg)
 
         # Ensemble predictions
         seg_all_tensor = torch.stack([torch.tensor(seg) for seg in seg_all]).to(device)  
         summed_voxel = torch.sum(seg_all_tensor, dim=0)
         ensemble = (summed_voxel > 2).cpu().numpy()  
-        print("Ensemble shape:", ensemble.shape) 
 
     return {
         'CHP': ensemble.astype(np.uint8),
