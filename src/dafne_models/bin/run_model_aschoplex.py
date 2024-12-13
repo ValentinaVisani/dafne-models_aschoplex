@@ -69,7 +69,6 @@ def main():
     parser.add_argument("--model", "-m", type=str, required=True, help="Path to the model file to use")
     parser.add_argument("--classification", nargs=1, metavar='class', type=str, required=False, help="Classification label")
     parser.add_argument("--output", "-o", type=str, required=False, help="Path to save the output", default='.')
-    # parser.add_argument("--options", "-p", type=str, required=False, help="Options to be passed to the model", default='')
     args = parser.parse_args()
 
     # options=parse_complex_options(args.options)
@@ -109,28 +108,8 @@ def main():
     # build the model object. Now that the dependencies are installed, the model can be loaded
     model = generic_load_model(input_dict)
 
-    # # check if the model has a specific orientation
-    # model_orientation = metadata.get('orientation', None)
-
-    # if isinstance(model_orientation, str):
-    #     # the orientation is a string (Axial/Transversal, Sagittal, Coronal)
-    #     model_orientation = model_orientation.lower()
-    #     if model_orientation.startswith('a') or model_orientation.startswith('t'):
-    #         model_orientation = ('LR', 'AP', 'SI')
-    #     elif model_orientation.startswith('s'):
-    #         model_orientation = ('AP', 'IS', 'LR')
-    #     elif model_orientation.startswith('c'):
-    #         model_orientation = ('LR', 'SI', 'AP')
-    #     else:
-    #         print("Unknown orientation")
-    #         model_orientation = None
-
     image = medical_volume_from_path(args.image_path, reorient_data=False)
 
-    # original_orientation = image.orientation
-
-    # if model_orientation is not None and model_orientation != original_orientation:
-    #     image.reformat(model_orientation, inplace=True)
 
     resolution = image.pixel_spacing
     inputs = image.volume.astype(np.float32)
@@ -138,28 +117,7 @@ def main():
 
     print("Image loaded")
 
-    # for contrast in args.other_contrasts:
-    #     contrast_image = medical_volume_from_path(contrast, reorient_data=False)
-    #     contrast_image = realign_medical_volume(contrast_image, image)
-    #     inputs.append(contrast_image.volume.astype(np.float32))
-
-    # print("Contrasts loaded")
-
-    dimensionality = 3 #model.data_dimensionality
     output_masks = {}
-    # if dimensionality == 2: # this is a 2D model
-    #     print("2D model")
-    #     n_slices = image.shape[2]
-    #     for i in range(n_slices):
-    #         input_dict = {'image': inputs[0][:, :, i], 'resolution': resolution[:2], 'options': options, 'split_laterality': False, 'classification': model_classification}
-    #         for idx, contrast in enumerate(inputs[1:]):
-    #             input_dict[f'image{idx+1}'] = contrast[:, :, i]
-    #         output = model.apply(input_dict)
-    #         for key, mask in output.items():
-    #             if key not in output_masks:
-    #                 output_masks[key] = np.zeros((image.shape[0], image.shape[1], n_slices), dtype=np.uint8)
-    #             output_masks[key][:, :, i] = mask
-    # else: # this is a 3D model
     print("3D model")
     input_dict = {'image': inputs, 'affine': affine, 'resolution': resolution, 'split_laterality': False, 'classification': model_classification}
 
@@ -172,8 +130,6 @@ def main():
 
     for key, mask in output_masks.items():
         output_data = vx.MedicalVolume(mask, image.affine)
-        # if model_orientation is not None and model_orientation != original_orientation:
-        #     output_data.reformat(original_orientation, inplace=True)
         writer.save(output_data, os.path.join(args.output, f'{key}.nii.gz'))
 
 
